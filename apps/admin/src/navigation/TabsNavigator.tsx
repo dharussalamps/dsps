@@ -1,10 +1,10 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useTranslation } from 'react-i18next';
+import { AnnouncementsScreen } from '@/features/announcements/AnnouncementsScreen';
 import { AttendanceBoardScreen } from '@/features/attendance/AttendanceBoardScreen';
 import { HomeScreen } from '@/features/home/HomeScreen';
 import { MoreScreen } from '@/features/more/MoreScreen';
 import { StudentSearchScreen } from '@/features/students/StudentSearchScreen';
-import { PlaceholderScreen } from '@/screens/PlaceholderScreen';
 import { colors, semantic } from '@/theme/tokens';
 import type { TabParamList } from './types';
 
@@ -32,9 +32,7 @@ export function TabsNavigator() {
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: t('nav.home') }} />
       <Tab.Screen name="StudentSearch" component={StudentSearchScreen} options={{ title: t('nav.students') }} />
       <Tab.Screen name="AttendanceBoard" component={AttendanceBoardScreen} options={{ title: t('nav.attendance') }} />
-      <Tab.Screen name="Announcements" options={{ title: t('nav.announcements') }}>
-        {() => <PlaceholderScreen title={t('nav.announcements')} buildTask={16} />}
-      </Tab.Screen>
+      <Tab.Screen name="Announcements" component={AnnouncementsScreen} options={{ title: t('nav.announcements') }} />
       <Tab.Screen name="More" component={MoreScreen} options={{ title: t('nav.more') }} />
     </Tab.Navigator>
   );

@@ -1,0 +1,126 @@
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Text, View } from 'react-native';
+import { Button, Card, Screen, ScreenHeader, TextField } from '@/components';
+import { useClasses } from '@/features/students/hooks';
+import { supabase } from '@/lib/supabase';
+import type { RootStackParamList } from '@/navigation/types';
+import { spacing, typography, semantic } from '@/theme/tokens';
+import { composeAnnouncement, type AudienceType } from './api';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+const audienceLabels: Record<AudienceType, string> = {
+  all_staff: 'Whole school',
+  section: 'A section (grade)',
+  class: 'A class',
+  individuals: 'Specific staff',
+};
+
+export function ComposeAnnouncementScreen() {
+  const navigation = useNavigation<Nav>();
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [audience, setAudience] = useState<AudienceType>('all_staff');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const classes = useClasses();
+  const grades = useQuery({
+    queryKey: ['grades', 'all'],
+    queryFn: async () => {
+      const { data, error: gErr } = await supabase.from('grades').select('id, number, name').order('number');
+      if (gErr) throw gErr;
+      return data ?? [];
+    },
+    enabled: audience === 'section',
+  });
+  const staffList = useQuery({
+    queryKey: ['staff', 'all-for-compose'],
+    queryFn: async () => {
+      const { data, error: sErr } = await supabase.from('staff').select('id, full_name').eq('status', 'active').order('full_name');
+      if (sErr) throw sErr;
+      return data ?? [];
+    },
+    enabled: audience === 'individuals',
+  });
+
+  function toggleId(id: string) {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function submit() {
+    setError(null);
+    if (!title.trim() || !body.trim()) {
+      setError('Title and message are required.');
+      return;
+    }
+    if (audience !== 'all_staff' && selectedIds.length === 0) {
+      setError('Choose at least one recipient.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await composeAnnouncement({ title: title.trim(), body: body.trim(), audience, audienceIds: selectedIds });
+      navigation.goBack();
+    } catch {
+      setError('Could not publish this announcement.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Screen>
+      <ScreenHeader title="New announcement" />
+      <Card>
+        <TextField label="Title" value={title} onChangeText={setTitle} />
+        <TextField label="Message" value={body} onChangeText={setBody} multiline />
+
+        <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>AUDIENCE</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+          {(Object.keys(audienceLabels) as AudienceType[]).map((a) => (
+            <Button
+              key={a}
+              label={audienceLabels[a]}
+              size="sm"
+              variant={audience === a ? 'primary' : 'outline'}
+              onPress={() => {
+                setAudience(a);
+                setSelectedIds([]);
+              }}
+            />
+          ))}
+        </View>
+
+        {audience === 'section' ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+            {(grades.data ?? []).map((g) => (
+              <Button key={g.id} label={g.name} size="sm" variant={selectedIds.includes(g.id) ? 'primary' : 'outline'} onPress={() => toggleId(g.id)} />
+            ))}
+          </View>
+        ) : null}
+        {audience === 'class' ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+            {(classes.data ?? []).map((c) => (
+              <Button key={c.id} label={c.name} size="sm" variant={selectedIds.includes(c.id) ? 'primary' : 'outline'} onPress={() => toggleId(c.id)} />
+            ))}
+          </View>
+        ) : null}
+        {audience === 'individuals' ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+            {(staffList.data ?? []).map((s) => (
+              <Button key={s.id} label={s.full_name} size="sm" variant={selectedIds.includes(s.id) ? 'primary' : 'outline'} onPress={() => toggleId(s.id)} />
+            ))}
+          </View>
+        ) : null}
+
+        {error ? <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{error}</Text> : null}
+        <Button label="Publish" onPress={() => void submit()} loading={submitting} />
+      </Card>
+    </Screen>
+  );
+}

@@ -1,4 +1,5 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { ComposeAnnouncementScreen } from '@/features/announcements/ComposeAnnouncementScreen';
 import { AttendanceSubmittedScreen } from '@/features/attendance/AttendanceSubmittedScreen';
 import { MarkAttendanceScreen } from '@/features/attendance/MarkAttendanceScreen';
 import { EarlyLeaveScreen } from '@/features/earlyLeave/EarlyLeaveScreen';
@@ -54,9 +55,7 @@ export function AppNavigator() {
       <Stack.Screen name="LeaveRequests" component={LeaveRequestsScreen} options={{ title: 'Leave requests' }} />
       <Stack.Screen name="LeaveRequestDetail" component={LeaveRequestDetailScreen} options={{ title: 'Leave request' }} />
 
-      <Stack.Screen name="ComposeAnnouncement" options={{ title: 'New announcement' }}>
-        {() => <PlaceholderScreen title="New announcement" buildTask={16} />}
-      </Stack.Screen>
+      <Stack.Screen name="ComposeAnnouncement" component={ComposeAnnouncementScreen} options={{ title: 'New announcement' }} />
 
       <Stack.Screen name="Inventory" options={{ title: 'Inventory' }}>
         {() => <PlaceholderScreen title="Inventory" buildTask={18} />}
