@@ -2,6 +2,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ComposeAnnouncementScreen } from '@/features/announcements/ComposeAnnouncementScreen';
 import { AttendanceSubmittedScreen } from '@/features/attendance/AttendanceSubmittedScreen';
 import { MarkAttendanceScreen } from '@/features/attendance/MarkAttendanceScreen';
+import { AuditLogScreen } from '@/features/accounts/AuditLogScreen';
+import { UserAccountsScreen } from '@/features/accounts/UserAccountsScreen';
 import { AnalyticsScreen } from '@/features/analytics/AnalyticsScreen';
 import { EarlyLeaveScreen } from '@/features/earlyLeave/EarlyLeaveScreen';
 import { DiaryScreen } from '@/features/events/DiaryScreen';
@@ -78,12 +80,8 @@ export function AppNavigator() {
       </Stack.Screen>
 
       <Stack.Screen name="Analytics" component={AnalyticsScreen} options={{ title: 'Analytics' }} />
-      <Stack.Screen name="UserAccounts" options={{ title: 'User accounts' }}>
-        {() => <PlaceholderScreen title="User accounts" buildTask={21} />}
-      </Stack.Screen>
-      <Stack.Screen name="AuditLog" options={{ title: 'Audit log' }}>
-        {() => <PlaceholderScreen title="Audit log" buildTask={21} />}
-      </Stack.Screen>
+      <Stack.Screen name="UserAccounts" component={UserAccountsScreen} options={{ title: 'User accounts' }} />
+      <Stack.Screen name="AuditLog" component={AuditLogScreen} options={{ title: 'Audit log' }} />
       <Stack.Screen name="Settings" options={{ title: 'Settings' }}>
         {() => <PlaceholderScreen title="Settings" buildTask={22} />}
       </Stack.Screen>
