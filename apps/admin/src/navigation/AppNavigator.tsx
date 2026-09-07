@@ -3,6 +3,9 @@ import { ComposeAnnouncementScreen } from '@/features/announcements/ComposeAnnou
 import { AttendanceSubmittedScreen } from '@/features/attendance/AttendanceSubmittedScreen';
 import { MarkAttendanceScreen } from '@/features/attendance/MarkAttendanceScreen';
 import { EarlyLeaveScreen } from '@/features/earlyLeave/EarlyLeaveScreen';
+import { DiaryScreen } from '@/features/events/DiaryScreen';
+import { EventCalendarScreen } from '@/features/events/EventCalendarScreen';
+import { EventDetailScreen } from '@/features/events/EventDetailScreen';
 import { InventoryItemScreen } from '@/features/inventory/InventoryItemScreen';
 import { InventoryScreen } from '@/features/inventory/InventoryScreen';
 import { LeaveRequestDetailScreen } from '@/features/leave/LeaveRequestDetailScreen';
@@ -62,15 +65,9 @@ export function AppNavigator() {
       <Stack.Screen name="Inventory" component={InventoryScreen} options={{ title: 'Inventory' }} />
       <Stack.Screen name="InventoryItem" component={InventoryItemScreen} options={{ title: 'Item' }} />
 
-      <Stack.Screen name="EventCalendar" options={{ title: 'Events' }}>
-        {() => <PlaceholderScreen title="Events" buildTask={19} />}
-      </Stack.Screen>
-      <Stack.Screen name="EventDetail" options={{ title: 'Event' }}>
-        {() => <PlaceholderScreen title="Event" buildTask={19} />}
-      </Stack.Screen>
-      <Stack.Screen name="Diary" options={{ title: 'School diary' }}>
-        {() => <PlaceholderScreen title="School diary" buildTask={19} />}
-      </Stack.Screen>
+      <Stack.Screen name="EventCalendar" component={EventCalendarScreen} options={{ title: 'Events' }} />
+      <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event' }} />
+      <Stack.Screen name="Diary" component={DiaryScreen} options={{ title: 'School diary' }} />
 
       <Stack.Screen name="AcademicCalendar" options={{ title: 'Academic calendar' }}>
         {() => <PlaceholderScreen title="Academic calendar" buildTask={6} />}
