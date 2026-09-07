@@ -19,6 +19,7 @@ const menu: MenuItem[] = [
   { label: 'Staff directory', route: 'StaffDirectory' },
   { label: 'My leave', route: 'MyLeave' },
   { label: 'Leave requests', route: 'LeaveRequests' },
+  { label: 'Marks review', route: 'MarksReview' },
   { label: 'Inventory', route: 'Inventory' },
   { label: 'Events', route: 'EventCalendar' },
   { label: 'School diary', route: 'Diary' },

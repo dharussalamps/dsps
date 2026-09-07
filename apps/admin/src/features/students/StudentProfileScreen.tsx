@@ -1,6 +1,7 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { ActivityIndicator, Linking, Text, View } from 'react-native';
 import { Button, Card, EmptyState, Screen, ScreenHeader, StatusPill } from '@/components';
+import { useStudentMarks } from '@/features/marks/hooks';
 import type { RootStackParamList } from '@/navigation/types';
 import { semantic, spacing, typography } from '@/theme/tokens';
 import { useStudentGuardians, useStudentProfile } from './hooks';
@@ -9,7 +10,6 @@ type Route = RouteProp<RootStackParamList, 'StudentProfile'>;
 
 const upcomingTabs = [
   { label: 'Attendance', buildTask: 9 },
-  { label: 'Marks', buildTask: 14 },
   { label: 'Activity', buildTask: 15 },
   { label: 'Benefits', buildTask: 15 },
 ];
@@ -18,6 +18,7 @@ export function StudentProfileScreen() {
   const { params } = useRoute<Route>();
   const profile = useStudentProfile(params.studentId);
   const guardians = useStudentGuardians(params.studentId);
+  const marks = useStudentMarks(params.studentId);
 
   if (profile.isLoading) {
     return (
@@ -65,6 +66,28 @@ export function StudentProfileScreen() {
                 size="sm"
                 onPress={() => Linking.openURL(`tel:${g.phonePrimary}`)}
               />
+            </View>
+          ))}
+        </Card>
+      ) : null}
+
+      {marks.data && marks.data.length > 0 ? (
+        <Card>
+          <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>MARKS</Text>
+          {marks.data.map((m, i) => (
+            <View key={`${m.subjectName}-${m.termName}-${i}`} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs }}>
+              <View>
+                <Text style={{ ...typography.body, color: semantic.textPrimary }}>{m.subjectName}</Text>
+                <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{m.termName}</Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>
+                  {m.score ?? '—'} / {m.maxScore}
+                </Text>
+                {m.classAverage != null ? (
+                  <Text style={{ ...typography.caption, color: semantic.textSecondary }}>Class avg {m.classAverage}</Text>
+                ) : null}
+              </View>
             </View>
           ))}
         </Card>

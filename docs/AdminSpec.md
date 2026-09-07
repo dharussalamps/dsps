@@ -1076,7 +1076,7 @@ claimed as verified.
 | 12 | Early leave, staff check-in, staff attendance board | not started | |
 | 12 | Early leave, staff check-in, staff attendance board | done | `early_leaves`/`staff_attendance` (§4.5) + RLS. `EarlyLeaveScreen` (reachable from `AttendanceSubmitted`), self check-in via a `check_in_self()` RPC (server decides present-vs-late from `school_settings.staff_late_after`, not a client-reported status) surfaced as a card on Home, and a student/staff tab switch added to `AttendanceBoardScreen` per section 10's "switch student/staff tab" action. `mark_staff_absent` job written but lands in the next migration (needs `leave_requests` to check "no approved leave"). |
 | 13 | Leave: request, balances, approval, cover assignment | done | `leave_balances`/`leave_requests` (§4.6). `approve_leave()`/`reject_leave()` (SECURITY DEFINER, since they touch balances/cover/notifications with no general client write policy) implement the cover-required rule and the balance debit atomically; `assign_cover()` for cover assigned outside a leave request. A `can_view_staff_leave()` helper resolves section 15 open decision #3 ("sectional head sees own section's balances") — see the migration comment for why this couldn't just be `has_permission(..., 'grade')` the way everything else is. `MyLeaveScreen`/`LeaveRequestsScreen`/`LeaveRequestDetailScreen` built (plain YYYY-MM-DD text fields for dates — no date-picker library is installed). pgTAP test proves the cover-required block and the acknowledged-override path (§11's stated acceptance test). `mark_staff_absent` job now complete alongside these tables. |
-| 14 | Marks: sheets, entry, lock, reopen, averages, trends | not started | |
+| 14 | Marks: sheets, entry, lock, reopen, averages, trends | done | `mark_sheets`/`marks` (§4.7) + RLS (`write_marks` only allows writes while `status = 'draft'`, satisfying FR-MRK-03 by construction). `submit_mark_sheet()`/`reopen_mark_sheet()` (SECURITY DEFINER, `marks.enter`/`marks.reopen` respectively) and `class_subject_average()` for FR-MRK-05. `MarkEntryScreen` (reachable from `ClassDetail` via a subject picker over `grade_subjects` — there's no dedicated subject-teacher-assignment UI yet, so this doesn't limit to `class_subject_teachers`), `MarksReviewScreen` (visible sheets, reopen for principal), and a marks section added to `StudentProfileScreen` (score beside class average, per FR-MRK-05). No **trends** (term-over-term) yet — that needs `attendance_summaries`-style aggregation, deferred to task 20 (analytics) where the same aggregation machinery is being built anyway. pgTAP test proves a submitted sheet resists edits and that only `marks.reopen` (not `marks.enter`) can reopen it. |
 | 15 | Achievements, memberships, benefits, student timeline | not started | |
 | 16 | Announcements: compose, audience, push, read receipts | not started | |
 | 17 | Responsibilities and duty roster | not started | |
@@ -1153,3 +1153,9 @@ claimed as verified.
   is called directly via `supabase.rpc()` — same security posture, one
   fewer moving part. `submit-attendance` keeps its Edge Function because
   the offline queue needs a stable HTTP endpoint to retry against.
+- **`mark_sheet_status.'reopened'` never rests.** `reopen_mark_sheet()`
+  sets a sheet straight back to `'draft'` rather than leaving it at
+  `'reopened'`, so the one `write_marks` RLS policy (which only allows
+  `status = 'draft'`) covers both first entry and post-reopen editing
+  without a second, near-duplicate policy. `reopened_by` still records who
+  reopened it.

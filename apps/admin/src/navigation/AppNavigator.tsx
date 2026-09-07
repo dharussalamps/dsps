@@ -5,6 +5,8 @@ import { EarlyLeaveScreen } from '@/features/earlyLeave/EarlyLeaveScreen';
 import { LeaveRequestDetailScreen } from '@/features/leave/LeaveRequestDetailScreen';
 import { LeaveRequestsScreen } from '@/features/leave/LeaveRequestsScreen';
 import { MyLeaveScreen } from '@/features/leave/MyLeaveScreen';
+import { MarkEntryScreen } from '@/features/marks/MarkEntryScreen';
+import { MarksReviewScreen } from '@/features/marks/MarksReviewScreen';
 import { ClassDetailScreen } from '@/features/students/ClassDetailScreen';
 import { ClassListScreen } from '@/features/students/ClassListScreen';
 import { StudentProfileScreen } from '@/features/students/StudentProfileScreen';
@@ -42,12 +44,8 @@ export function AppNavigator() {
       <Stack.Screen name="AttendanceSubmitted" component={AttendanceSubmittedScreen} options={{ title: 'Attendance submitted' }} />
       <Stack.Screen name="EarlyLeave" component={EarlyLeaveScreen} options={{ title: 'Early leave' }} />
 
-      <Stack.Screen name="MarkEntry" options={{ title: 'Enter marks' }}>
-        {() => <PlaceholderScreen title="Enter marks" buildTask={14} />}
-      </Stack.Screen>
-      <Stack.Screen name="MarksReview" options={{ title: 'Marks review' }}>
-        {() => <PlaceholderScreen title="Marks review" buildTask={14} />}
-      </Stack.Screen>
+      <Stack.Screen name="MarkEntry" component={MarkEntryScreen} options={{ title: 'Enter marks' }} />
+      <Stack.Screen name="MarksReview" component={MarksReviewScreen} options={{ title: 'Marks review' }} />
 
       <Stack.Screen name="StaffDirectory" component={StaffDirectoryScreen} options={{ title: 'Staff directory' }} />
       <Stack.Screen name="StaffProfile" component={StaffProfileScreen} options={{ title: 'Staff profile' }} />
