@@ -13,14 +13,26 @@
   },
   "auth": {
     "signIn": "Sign in",
-    "email": "Email or staff number",
+    "email": "Email",
     "password": "Password",
     "forgotPassword": "Forgot password?",
     "signInError": "Couldn't sign in. Check your details and try again.",
     "setPasswordTitle": "Set your password",
     "setPasswordHint": "This is your first sign-in — choose a password to continue.",
     "newPassword": "New password",
-    "confirmPassword": "Confirm password"
+    "confirmPassword": "Confirm password",
+    "passwordMismatch": "Passwords don't match.",
+    "passwordTooShort": "Use at least 8 characters.",
+    "resetTitle": "Reset your password",
+    "resetHint": "Enter the phone number on your staff record — we'll text you a code.",
+    "phone": "Phone number",
+    "sendCode": "Send code",
+    "resetCodeSentHint": "Enter the code we sent, then choose a new password.",
+    "code": "Verification code",
+    "verifyAndContinue": "Verify and continue",
+    "backToSignIn": "Back to sign in",
+    "resetError": "Couldn't send that code. Check the phone number and try again.",
+    "verifyError": "That code didn't work. Check it and try again."
   },
   "nav": {
     "home": "Home",

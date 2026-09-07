@@ -12,6 +12,18 @@ as $$
   select id from staff where auth_user_id = auth.uid();
 $$;
 
+-- Deviation from AdminSpec.md section 5.3 as written, noted in section 17:
+-- the spec's scope_type enum includes 'self' (used by the base 'staff'
+-- role, and documented as the default scope for leave.request) but the
+-- WHERE clause given in section 5.3 only ever matches 'school', 'grade' or
+-- 'class' — a 'self'-scoped grant could never match, so a plain staff
+-- member's staff.view_directory/leave.request would silently never work.
+-- 'self' is treated here like 'school' (the grant applies regardless of
+-- p_class_id): has_permission() answers "does this staff member hold this
+-- permission at all", not "only over their own records" — that narrower
+-- restriction is enforced separately, by each table's RLS policy checking
+-- e.g. `staff_id = current_staff_id()`, the same way ownership is already
+-- checked for things like "my own leave requests".
 create or replace function has_permission(
   p_staff_id uuid,
   p_permission text,
@@ -26,7 +38,7 @@ create or replace function has_permission(
       and sr.revoked_at is null
       and rp.permission_key = p_permission
       and (
-            sr.scope_type = 'school'
+            sr.scope_type in ('school', 'self')
         or (sr.scope_type = 'grade' and c.grade_id = sr.scope_id)
         or (sr.scope_type = 'class' and c.id       = sr.scope_id)
       )
@@ -42,3 +54,9 @@ create or replace function has_permission(
       and rp2.permission_key = p_permission
   );
 $$;
+
+-- Both functions run inside RLS policy expressions, evaluated as the
+-- querying role — they must be directly executable by that role or every
+-- policy referencing them fails closed with a permission error.
+grant execute on function current_staff_id() to authenticated;
+grant execute on function has_permission(uuid, text, uuid) to authenticated;

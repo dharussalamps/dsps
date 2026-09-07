@@ -678,7 +678,7 @@ create or replace function has_permission(
       and sr.revoked_at is null
       and rp.permission_key = p_permission
       and (
-            sr.scope_type = 'school'
+            sr.scope_type in ('school', 'self')
         or (sr.scope_type = 'grade' and c.grade_id = sr.scope_id)
         or (sr.scope_type = 'class' and c.id       = sr.scope_id)
       )
@@ -695,6 +695,16 @@ create or replace function has_permission(
   );
 $$;
 ```
+
+**Implementation note (see section 17 for the full write-up):** the
+`scope_type` enum includes `'self'`, used by the base `staff` role, but a
+`WHERE` clause that only matched `'school'`, `'grade'` or `'class'` would
+mean a `'self'`-scoped grant could never be true — `staff.view_directory`
+for a plain staff member would silently never work. `'self'` is matched
+alongside `'school'` above: `has_permission()` answers "does this staff
+member hold this permission at all", and the narrower "only over their own
+records" restriction (e.g. a leave request) is enforced separately, by that
+table's RLS policy checking `staff_id = current_staff_id()`.
 
 Every RLS policy calls this function. Example:
 
@@ -1053,12 +1063,12 @@ claimed as verified.
 | # | Task | Status | Note |
 |---|---|---|---|
 | 1 | Repo, Expo app, Supabase project, CI, migration pipeline | done | Git repo initialized. Expo app scaffolded: theme (tokens.ts, matches logo), base components, Supabase client, i18n, Zustand auth-session store, full navigation shell (all §10 routes registered, unbuilt ones show a tagged placeholder). Typecheck/lint/vitest all clean; `expo export --platform android` bundles 1076 modules with no errors — the closest available proxy for "boots" in this environment (no device/emulator here). CI workflow added (`.github/workflows/ci.yml`). Supabase project itself is code-only — not run, see backend/README.md. |
-| 2 | Core tables (4.1–4.4) + seed roles/permissions/leave types/subjects | done | All tables from §4.1–4.4 migrated, plus `audit_log` and `leave_types` pulled forward (both needed by this task's own seed/audit requirements). `has_permission()`/`current_staff_id()` implemented verbatim from §5.3. Seed files for roles/permissions/role_permissions/grades/subjects/leave_types/school_settings, plus a reduced-scale dev sample dataset (§13). pgTAP test file with 9 hand-written `has_permission` cases. **Not executed against a live Postgres** — no Supabase CLI/Docker in this environment; verified by review only. Run `supabase db reset && supabase test db` per backend/README.md to confirm. |
-| 3 | Auth: sign in, first-password set, reset by OTP, session handling | not started | |
-| 4 | RLS policies for all tables, with pgTAP tests | not started | |
+| 2 | Core tables (4.1–4.4) + seed roles/permissions/leave types/subjects | done | All tables from §4.1–4.4 migrated, plus `audit_log` and `leave_types` pulled forward (both needed by this task's own seed/audit requirements). `has_permission()`/`current_staff_id()` implemented per §5.3, with a bug fix (see below). Seed files for roles/permissions/role_permissions/grades/subjects/leave_types/school_settings, plus a reduced-scale dev sample dataset (§13). pgTAP test file with 10 hand-written `has_permission` cases. **Not executed against a live Postgres** — no Supabase CLI/Docker in this environment; verified by review only. Run `supabase db reset && supabase test db` per backend/README.md to confirm. |
+| 3 | Auth: sign in, first-password set, reset by OTP, session handling | done | SignIn (email + password), SetPassword (first-login, see the `needs_password_set` convention below), and a phone-based OTP password-reset flow (phone chosen over email because `staff.phone` is required and `staff.email` is optional — see below) all built and wired through `authStore`/`RootNavigator`. Session persists via AsyncStorage. **Not verified against a live project**: the dev seed's staff rows have no linked `auth.users` yet (see the seed file's own comment for how to link one), and OTP delivery depends on the project's SMS provider being configured — neither is available in this environment. |
+| 4 | RLS policies for all tables, with pgTAP tests | in progress | Every table that exists as of build task 2 (§4.1–4.4, `audit_log`, `leave_types`) has policies — see `20260907100002_rls_policies_phase1.sql`, plus a `student_guardians_contact` view (§5.4) and a pgTAP test proving cross-class isolation on `student_enrolments` (the section 11 acceptance criterion, applied here since attendance tables don't exist yet). Marked "in progress" rather than "done" because later build tasks each introduce their own new tables and must add policies alongside them — this task doesn't have a single finish line under this build order. **Not executed against a live Postgres.** |
 | 5 | Spreadsheet import for students, guardians, staff, classes | not started | |
-| 6 | Academic calendar + `is_school_day` | not started | |
-| 7 | Student and staff directories, search, profile shell | not started | |
+| 6 | Academic calendar + `is_school_day` | in progress | `is_school_day()` implemented verbatim from §6.1. The `AcademicCalendar`/`CalendarDayEditor` screens (principal-only editing) are still placeholders. |
+| 7 | Student and staff directories, search, profile shell | done | `StudentSearch` (search by name/admission number + browse-by-class), `ClassDetail` (roster), `StudentProfile` (basic info + guardians, gated automatically by RLS + `student_guardians_contact`; Attendance/Marks/Activity/Benefits sections shown as "coming with task N"), `StaffDirectory` and `StaffProfile` (basic info; Attendance/Responsibilities/Leave similarly deferred). All read through TanStack Query hooks calling Supabase directly — no client-side permission gating built yet (out of scope until Home needs it, per the plan); screens simply show whatever RLS returns, with an empty state otherwise. |
 | 8 | Offline engine: SQLite queue, sync loop, idempotency | not started | |
 | 9 | Mark attendance, submit, edit window, confirmation | not started | |
 | 10 | Attendance board, class drill-down, remind unmarked | not started | |
@@ -1085,3 +1095,15 @@ claimed as verified.
   Functions, and pgTAP tests are written to the Supabase CLI's expected
   layout but not executed here (no CLI/Docker/Postgres available). See
   `backend/README.md` for the commands to run them locally.
+- **`has_permission()` bug fix**: section 5.3's `WHERE` clause is corrected
+  to also match `scope_type = 'self'` (see the implementation note there).
+  As originally written, no `'self'`-scoped grant could ever be true.
+- **First-login detection**: not specified by this document. An account
+  created without a password (build task 21) carries
+  `user_metadata.needs_password_set = true`; `SetPassword` clears it after
+  the user chooses one. `src/store/authStore.ts` is the reference.
+- **Password reset method**: section 10 says `SignIn` offers "forgot
+  password" and build task 3 says "reset by OTP" without saying which
+  channel. Implemented over phone/SMS rather than email, because
+  `staff.phone` is required and `staff.email` is optional (section 4.3) —
+  an email-only reset would lock out any staff member without one on file.

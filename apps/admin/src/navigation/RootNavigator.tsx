@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { SetPasswordScreen } from '@/features/auth/SetPasswordScreen';
 import { initAuthListener, useAuthStore } from '@/store/authStore';
 import { semantic } from '@/theme/tokens';
 import { AppNavigator } from './AppNavigator';
@@ -18,5 +19,7 @@ export function RootNavigator() {
     );
   }
 
-  return status === 'signedIn' ? <AppNavigator /> : <AuthNavigator />;
+  if (status === 'signedIn') return <AppNavigator />;
+  if (status === 'needsPasswordSet') return <SetPasswordScreen />;
+  return <AuthNavigator />;
 }

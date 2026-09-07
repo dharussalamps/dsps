@@ -5,7 +5,7 @@
 -- seed data and leaves no trace either way.
 
 begin;
-select plan(9);
+select plan(10);
 
 -- Fixture: one grade, two classes in it, a third class in a different
 -- grade; one role per scope kind; one permission; one staff member per
@@ -57,8 +57,17 @@ insert into staff (staff_no, full_name, phone) values
   ('TEST-CLASS',  'Test Class Scope',  '0000000003'),
   ('TEST-REVOKED','Test Revoked',      '0000000004'),
   ('TEST-COVER',  'Test Cover Scope',  '0000000005'),
-  ('TEST-NOPERM', 'Test No Permission','0000000006')
+  ('TEST-NOPERM', 'Test No Permission','0000000006'),
+  ('TEST-SELF',   'Test Self Scope',   '0000000007')
 on conflict (staff_no) do nothing;
+
+insert into roles (key, name) values ('test_self_role', 'Test Self Role')
+on conflict (key) do nothing;
+insert into role_permissions (role_id, permission_key)
+select id, 'test.permission' from roles where key = 'test_self_role'
+on conflict do nothing;
+insert into staff_roles (staff_id, role_id, scope_type, scope_id)
+select (select id from staff where staff_no = 'TEST-SELF'), (select id from roles where key = 'test_self_role'), 'self', null;
 
 insert into staff_roles (staff_id, role_id, scope_type, scope_id)
 select (select id from staff where staff_no = 'TEST-SCHOOL'), (select id from roles where key = 'test_school_role'), 'school', null;
@@ -106,6 +115,14 @@ select ok(
 select ok(
   not has_permission((select id from staff where staff_no = 'TEST-CLASS'), 'test.permission', (select id from classes where name = 'TestClassB')),
   'class-scope role denies permission for a sibling class in the same grade'
+);
+
+-- 3b. Self-scope role: granted regardless of class (see the fix note in
+--     the migration — 'self' behaves like 'school' for this check; a
+--     table's own RLS policy is what narrows it to "my own records").
+select ok(
+  has_permission((select id from staff where staff_no = 'TEST-SELF'), 'test.permission', (select id from classes where name = 'TestClassC')),
+  'self-scope role grants permission regardless of class'
 );
 
 -- 4. Revoked role never grants.

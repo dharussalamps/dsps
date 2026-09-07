@@ -1,4 +1,9 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { ClassDetailScreen } from '@/features/students/ClassDetailScreen';
+import { ClassListScreen } from '@/features/students/ClassListScreen';
+import { StudentProfileScreen } from '@/features/students/StudentProfileScreen';
+import { StaffDirectoryScreen } from '@/features/staff/StaffDirectoryScreen';
+import { StaffProfileScreen } from '@/features/staff/StaffProfileScreen';
 import { PlaceholderScreen } from '@/screens/PlaceholderScreen';
 import { colors, semantic } from '@/theme/tokens';
 import { TabsNavigator } from './TabsNavigator';
@@ -23,15 +28,9 @@ export function AppNavigator() {
     <Stack.Navigator screenOptions={headerOptions}>
       <Stack.Screen name="Tabs" component={TabsNavigator} options={{ headerShown: false }} />
 
-      <Stack.Screen name="ClassList" options={{ title: 'Classes' }}>
-        {() => <PlaceholderScreen title="Classes" buildTask={10} />}
-      </Stack.Screen>
-      <Stack.Screen name="ClassDetail" options={{ title: 'Class' }}>
-        {() => <PlaceholderScreen title="Class" buildTask={7} />}
-      </Stack.Screen>
-      <Stack.Screen name="StudentProfile" options={{ title: 'Student' }}>
-        {() => <PlaceholderScreen title="Student" buildTask={7} />}
-      </Stack.Screen>
+      <Stack.Screen name="ClassList" component={ClassListScreen} options={{ title: 'Classes' }} />
+      <Stack.Screen name="ClassDetail" component={ClassDetailScreen} options={{ title: 'Class' }} />
+      <Stack.Screen name="StudentProfile" component={StudentProfileScreen} options={{ title: 'Student' }} />
 
       <Stack.Screen name="MarkAttendance" options={{ title: 'Mark attendance' }}>
         {() => <PlaceholderScreen title="Mark attendance" buildTask={9} />}
@@ -50,12 +49,8 @@ export function AppNavigator() {
         {() => <PlaceholderScreen title="Marks review" buildTask={14} />}
       </Stack.Screen>
 
-      <Stack.Screen name="StaffDirectory" options={{ title: 'Staff directory' }}>
-        {() => <PlaceholderScreen title="Staff directory" buildTask={7} />}
-      </Stack.Screen>
-      <Stack.Screen name="StaffProfile" options={{ title: 'Staff profile' }}>
-        {() => <PlaceholderScreen title="Staff profile" buildTask={7} />}
-      </Stack.Screen>
+      <Stack.Screen name="StaffDirectory" component={StaffDirectoryScreen} options={{ title: 'Staff directory' }} />
+      <Stack.Screen name="StaffProfile" component={StaffProfileScreen} options={{ title: 'Staff profile' }} />
 
       <Stack.Screen name="MyLeave" options={{ title: 'My leave' }}>
         {() => <PlaceholderScreen title="My leave" buildTask={13} />}

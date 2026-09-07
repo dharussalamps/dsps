@@ -55,8 +55,10 @@ export type RootStackParamList = {
 
 export type AuthStackParamList = {
   SignIn: undefined;
-  SetPassword: undefined;
 };
+// SetPassword is not a navigable route: RootNavigator renders it directly
+// while auth status is 'needsPasswordSet' (see src/store/authStore.ts),
+// matching its gate in section 10 ("authenticated, first login").
 
 declare global {
   namespace ReactNavigation {
