@@ -3,6 +3,8 @@ import { ComposeAnnouncementScreen } from '@/features/announcements/ComposeAnnou
 import { AttendanceSubmittedScreen } from '@/features/attendance/AttendanceSubmittedScreen';
 import { MarkAttendanceScreen } from '@/features/attendance/MarkAttendanceScreen';
 import { EarlyLeaveScreen } from '@/features/earlyLeave/EarlyLeaveScreen';
+import { InventoryItemScreen } from '@/features/inventory/InventoryItemScreen';
+import { InventoryScreen } from '@/features/inventory/InventoryScreen';
 import { LeaveRequestDetailScreen } from '@/features/leave/LeaveRequestDetailScreen';
 import { LeaveRequestsScreen } from '@/features/leave/LeaveRequestsScreen';
 import { MyLeaveScreen } from '@/features/leave/MyLeaveScreen';
@@ -57,12 +59,8 @@ export function AppNavigator() {
 
       <Stack.Screen name="ComposeAnnouncement" component={ComposeAnnouncementScreen} options={{ title: 'New announcement' }} />
 
-      <Stack.Screen name="Inventory" options={{ title: 'Inventory' }}>
-        {() => <PlaceholderScreen title="Inventory" buildTask={18} />}
-      </Stack.Screen>
-      <Stack.Screen name="InventoryItem" options={{ title: 'Item' }}>
-        {() => <PlaceholderScreen title="Item" buildTask={18} />}
-      </Stack.Screen>
+      <Stack.Screen name="Inventory" component={InventoryScreen} options={{ title: 'Inventory' }} />
+      <Stack.Screen name="InventoryItem" component={InventoryItemScreen} options={{ title: 'Item' }} />
 
       <Stack.Screen name="EventCalendar" options={{ title: 'Events' }}>
         {() => <PlaceholderScreen title="Events" buildTask={19} />}
