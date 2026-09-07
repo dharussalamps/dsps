@@ -64,6 +64,57 @@ export async function fetchRosterForCaching(classId: string): Promise<CachedRost
     }));
 }
 
+export type StaffAttendanceRow = {
+  staffId: string;
+  fullName: string;
+  status: 'present' | 'late' | 'on_leave' | 'absent' | 'not_checked_in';
+  checkedInAt: string | null;
+};
+
+/** section 10: AttendanceBoard's "switch student/staff tab". RLS narrows this to what the caller may see (attendance.view_board, or just their own row). */
+export async function fetchStaffAttendanceToday(onDate: string): Promise<StaffAttendanceRow[]> {
+  const { data: staffRows, error: staffError } = await supabase
+    .from('staff')
+    .select('id, full_name')
+    .eq('status', 'active')
+    .order('full_name');
+  if (staffError) throw staffError;
+
+  const { data: attendanceRows, error: attendanceError } = await supabase
+    .from('staff_attendance')
+    .select('staff_id, status, checked_in_at')
+    .eq('on_date', onDate)
+    .returns<{ staff_id: string; status: string; checked_in_at: string | null }[]>();
+  if (attendanceError) throw attendanceError;
+
+  const byStaff = new Map(attendanceRows?.map((r) => [r.staff_id, r]));
+  return (staffRows ?? []).map((s) => {
+    const a = byStaff.get(s.id);
+    return {
+      staffId: s.id,
+      fullName: s.full_name,
+      status: (a?.status as StaffAttendanceRow['status']) ?? 'not_checked_in',
+      checkedInAt: a?.checked_in_at ?? null,
+    };
+  });
+}
+
+export async function fetchMyAttendanceToday(staffId: string, onDate: string): Promise<{ status: string; checkedInAt: string | null } | null> {
+  const { data, error } = await supabase
+    .from('staff_attendance')
+    .select('status, checked_in_at')
+    .eq('staff_id', staffId)
+    .eq('on_date', onDate)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? { status: data.status, checkedInAt: data.checked_in_at } : null;
+}
+
+export async function checkInSelf(): Promise<void> {
+  const { error } = await supabase.rpc('check_in_self');
+  if (error) throw error;
+}
+
 export async function remindUnmarkedClass(classId: string): Promise<void> {
   const { error } = await supabase.rpc('remind_unmarked_class', { p_class_id: classId });
   if (error) throw error;

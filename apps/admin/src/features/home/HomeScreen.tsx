@@ -2,6 +2,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { Button, Card, EmptyState, Screen, ScreenHeader, StatusPill } from '@/components';
 import { useAuthStore } from '@/store/authStore';
 import { semantic, spacing, typography } from '@/theme/tokens';
+import { CheckInCard } from './CheckInCard';
 import { useMyClasses, useIsSchoolDayToday } from './hooks';
 import { MyClassAttendanceCard } from './MyClassAttendanceCard';
 
@@ -31,13 +32,14 @@ export function HomeScreen() {
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
       ) : !isSchoolDay.data ? (
         <EmptyState title="Not a school day" message="Attendance marking opens on the next school day." />
-      ) : myClasses.data && myClasses.data.length > 0 ? (
+      ) : (
         <View style={{ gap: spacing.md }}>
-          {myClasses.data.map((c) => (
+          {myClasses.data?.map((c) => (
             <MyClassAttendanceCard key={c.classId} myClass={c} />
           ))}
+          {staff ? <CheckInCard staffId={staff.id} /> : null}
         </View>
-      ) : null}
+      )}
 
       <View style={{ gap: spacing.sm, marginTop: spacing.lg }}>
         <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>COMING TO HOME</Text>

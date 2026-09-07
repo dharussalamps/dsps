@@ -1074,8 +1074,8 @@ claimed as verified.
 | 10 | Attendance board, class drill-down, remind unmarked | done | `v_class_marking_status(on_date)` (§6.4, implemented as a set-returning function — Postgres views can't take parameters) — unmarked classes sort first, matching FR-ATT-10. `AttendanceBoardScreen` + a `remind_unmarked_class()` RPC for the per-class manual remind action (distinct from the scheduled digest in task 11). `ClassDetailScreen` now offers "Mark attendance" or "View today's attendance" depending on submission state. |
 | 11 | Scheduled jobs: reminder, escalation, lock, risk detection | done | All four jobs from §7, every one gated on `is_school_day(current_date)` first. `devices`/`notifications` (§4.10) pulled forward since these jobs need somewhere to write to. pg_cron can't follow a *column's* value (`school_settings.attendance_due_at`), so the reminder/escalation/risk jobs run every 5 minutes and self-gate on a time-of-day window instead — see the migration's own comment. pgTAP test proves zero output on a holiday (§11's stated acceptance test) for all four jobs. **Not run** — no pg_cron/live Postgres here, and push dispatch to Expo's push service (turning a `notifications` row into an actual device notification) isn't built: these jobs write rows to the in-app notification center, which is as far as this environment lets me verify anything real (no device push tokens to send to anyway). |
 | 12 | Early leave, staff check-in, staff attendance board | not started | |
-| 12 | Early leave, staff check-in, staff attendance board | not started | |
-| 13 | Leave: request, balances, approval, cover assignment | not started | |
+| 12 | Early leave, staff check-in, staff attendance board | done | `early_leaves`/`staff_attendance` (§4.5) + RLS. `EarlyLeaveScreen` (reachable from `AttendanceSubmitted`), self check-in via a `check_in_self()` RPC (server decides present-vs-late from `school_settings.staff_late_after`, not a client-reported status) surfaced as a card on Home, and a student/staff tab switch added to `AttendanceBoardScreen` per section 10's "switch student/staff tab" action. `mark_staff_absent` job written but lands in the next migration (needs `leave_requests` to check "no approved leave"). |
+| 13 | Leave: request, balances, approval, cover assignment | done | `leave_balances`/`leave_requests` (§4.6). `approve_leave()`/`reject_leave()` (SECURITY DEFINER, since they touch balances/cover/notifications with no general client write policy) implement the cover-required rule and the balance debit atomically; `assign_cover()` for cover assigned outside a leave request. A `can_view_staff_leave()` helper resolves section 15 open decision #3 ("sectional head sees own section's balances") — see the migration comment for why this couldn't just be `has_permission(..., 'grade')` the way everything else is. `MyLeaveScreen`/`LeaveRequestsScreen`/`LeaveRequestDetailScreen` built (plain YYYY-MM-DD text fields for dates — no date-picker library is installed). pgTAP test proves the cover-required block and the acknowledged-override path (§11's stated acceptance test). `mark_staff_absent` job now complete alongside these tables. |
 | 14 | Marks: sheets, entry, lock, reopen, averages, trends | not started | |
 | 15 | Achievements, memberships, benefits, student timeline | not started | |
 | 16 | Announcements: compose, audience, push, read receipts | not started | |
@@ -1136,6 +1136,20 @@ claimed as verified.
 - **pg_cron can't follow a configurable time.** `school_settings.
   attendance_due_at` can change at runtime, but a pg_cron schedule is a
   static cron expression. `remind_unmarked_classes`, `escalate_
-  unmarked_classes` and `detect_absence_risk` run every 5 minutes and
-  self-gate on a local-time window around the configured time instead of
-  being scheduled to fire once, exactly then.
+  unmarked_classes`, `detect_absence_risk` and (build task 12)
+  `mark_staff_absent` run every 5 minutes and self-gate on a local-time
+  window around the configured time instead of being scheduled to fire
+  once, exactly then.
+- **`leave_requests.cover_not_needed`**: not in section 4.6's table, but
+  section 11 requires the principal to be able to "explicitly acknowledge"
+  that no cover is needed, and there's nowhere else to persist that.
+- **`assign-cover` is an RPC only, not also an Edge Function.** Section 8
+  lists 8 Edge Functions; each gets a real Postgres function doing the
+  actual transactional/permission-checked work, but this build only wraps
+  that in a Deno function where the wrapper earns its keep (request
+  validation shared with an offline client, or work Postgres can't do —
+  parsing a spreadsheet, generating a signed export URL). `assign-cover` is
+  a single permission-checked write with no such need, so `assign_cover()`
+  is called directly via `supabase.rpc()` — same security posture, one
+  fewer moving part. `submit-attendance` keeps its Edge Function because
+  the offline queue needs a stable HTTP endpoint to retry against.

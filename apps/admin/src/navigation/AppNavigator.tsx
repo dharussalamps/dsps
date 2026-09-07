@@ -1,6 +1,10 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AttendanceSubmittedScreen } from '@/features/attendance/AttendanceSubmittedScreen';
 import { MarkAttendanceScreen } from '@/features/attendance/MarkAttendanceScreen';
+import { EarlyLeaveScreen } from '@/features/earlyLeave/EarlyLeaveScreen';
+import { LeaveRequestDetailScreen } from '@/features/leave/LeaveRequestDetailScreen';
+import { LeaveRequestsScreen } from '@/features/leave/LeaveRequestsScreen';
+import { MyLeaveScreen } from '@/features/leave/MyLeaveScreen';
 import { ClassDetailScreen } from '@/features/students/ClassDetailScreen';
 import { ClassListScreen } from '@/features/students/ClassListScreen';
 import { StudentProfileScreen } from '@/features/students/StudentProfileScreen';
@@ -36,9 +40,7 @@ export function AppNavigator() {
 
       <Stack.Screen name="MarkAttendance" component={MarkAttendanceScreen} options={{ title: 'Mark attendance' }} />
       <Stack.Screen name="AttendanceSubmitted" component={AttendanceSubmittedScreen} options={{ title: 'Attendance submitted' }} />
-      <Stack.Screen name="EarlyLeave" options={{ title: 'Early leave' }}>
-        {() => <PlaceholderScreen title="Early leave" buildTask={12} />}
-      </Stack.Screen>
+      <Stack.Screen name="EarlyLeave" component={EarlyLeaveScreen} options={{ title: 'Early leave' }} />
 
       <Stack.Screen name="MarkEntry" options={{ title: 'Enter marks' }}>
         {() => <PlaceholderScreen title="Enter marks" buildTask={14} />}
@@ -50,15 +52,9 @@ export function AppNavigator() {
       <Stack.Screen name="StaffDirectory" component={StaffDirectoryScreen} options={{ title: 'Staff directory' }} />
       <Stack.Screen name="StaffProfile" component={StaffProfileScreen} options={{ title: 'Staff profile' }} />
 
-      <Stack.Screen name="MyLeave" options={{ title: 'My leave' }}>
-        {() => <PlaceholderScreen title="My leave" buildTask={13} />}
-      </Stack.Screen>
-      <Stack.Screen name="LeaveRequests" options={{ title: 'Leave requests' }}>
-        {() => <PlaceholderScreen title="Leave requests" buildTask={13} />}
-      </Stack.Screen>
-      <Stack.Screen name="LeaveRequestDetail" options={{ title: 'Leave request' }}>
-        {() => <PlaceholderScreen title="Leave request" buildTask={13} />}
-      </Stack.Screen>
+      <Stack.Screen name="MyLeave" component={MyLeaveScreen} options={{ title: 'My leave' }} />
+      <Stack.Screen name="LeaveRequests" component={LeaveRequestsScreen} options={{ title: 'Leave requests' }} />
+      <Stack.Screen name="LeaveRequestDetail" component={LeaveRequestDetailScreen} options={{ title: 'Leave request' }} />
 
       <Stack.Screen name="ComposeAnnouncement" options={{ title: 'New announcement' }}>
         {() => <PlaceholderScreen title="New announcement" buildTask={16} />}

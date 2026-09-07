@@ -82,7 +82,9 @@ export function AttendanceSubmittedScreen() {
 
       {absentees.length === 0 && !existing.data && localAbsentees == null ? (
         <EmptyState title="No submission found" message="This class may not have been submitted for this date yet." />
-      ) : null}
+      ) : (
+        <Button label="Record early leave" variant="outline" onPress={() => navigation.navigate('EarlyLeave', { classId })} />
+      )}
     </Screen>
   );
 }
