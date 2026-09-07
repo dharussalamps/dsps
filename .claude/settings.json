@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p supabase/migrations supabase/functions supabase/seed supabase/tests)",
+      "Bash(mv migrations/*.sql supabase/migrations/)",
+      "Bash(mv seed/*.sql supabase/seed/)",
+      "Bash(mv tests/*.sql supabase/tests/)",
+      "Bash(rmdir migrations *)",
+      "Bash(npm ping *)",
+      "Bash(npx expo *)",
+      "Bash(npm install *)",
+      "Bash(npm ls *)",
+      "Bash(npm run *)",
+      "Bash(npx vitest *)",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

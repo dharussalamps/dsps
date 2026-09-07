@@ -69,25 +69,41 @@ These are fixed. Do not substitute.
 
 ## 3. Repository layout
 
+The repository is a small monorepo: the client lives under `apps/admin`
+(Expo's own root — `app.json`, `App.tsx`, `package.json` — so `expo start`
+runs from there directly) and the Supabase project lives under `backend`.
+This is the same shape the rest of this document describes as `/app` and
+`/supabase`; read those as `apps/admin` and `backend` respectively wherever
+they appear below.
+
 ```
-/app                    Expo React Native application
-  /src
-    /screens            One folder per screen, named as in section 10
-    /components         Shared presentational components
-    /features           Feature modules: attendance, marks, leave, inventory...
-    /lib
-      supabase.ts       Client initialisation
-      offline/          SQLite queue, sync engine, conflict handling
-      permissions.ts    Client-side mirror of permission checks (display only)
-    /i18n               Resource bundles; no user-facing string in code
-/supabase
-  /migrations           Versioned SQL, one file per change
-  /functions            Edge Functions
-  /seed                 Reference data: roles, permissions, leave types, subjects
-  /tests                pgTAP policy tests
+/apps
+  /admin                 Expo React Native application (Expo project root)
+    /src
+      /screens            One folder per screen, named as in section 10
+      /components         Shared presentational components
+      /theme              Design tokens + themed base components
+      /features           Feature modules: attendance, marks, leave, inventory...
+      /lib
+        supabase.ts       Client initialisation
+        offline/          SQLite queue, sync engine, conflict handling
+        permissions.ts    Client-side mirror of permission checks (display only)
+      /i18n               Resource bundles; no user-facing string in code
+/backend
+  /supabase                Supabase CLI project root (everything below is
+                            where the CLI itself expects it — this is what
+                            `supabase init` generates, not a custom layout)
+    config.toml             Supabase CLI project config
+    /migrations              Versioned SQL, one file per change
+    /functions               Edge Functions
+    /seed                    Reference data: roles, permissions, leave types,
+                              subjects, grades, dev sample data — run in
+                              filename order on `supabase db reset`
+    /tests                   pgTAP policy tests, run by `supabase test db`
+  README.md                 Local dev commands (supabase start / db push / test db)
 /docs
-  SRS.html              The requirements specification
-  build-spec.md         This document
+  AdminSRS.pdf             The requirements specification
+  AdminSpec.md             This document
 ```
 
 ---
@@ -1023,3 +1039,49 @@ Where a decision is unresolved, build the default and make it configurable.
 ## 16. Explicitly out of scope
 
 Do not build, and do not leave scaffolding for: the parent application, fee collection, timetabling, examination paper management, certificate generation, library circulation, transport, biometric hardware integration, external authority reporting, or a web console.
+
+---
+
+## 17. Build progress
+
+Updated as each task in section 12 is worked. Status is one of: **not
+started**, **in progress**, **done**. "Done" means the task's stated test
+in section 12 is believed to pass by code review; where this environment
+has no live Supabase project or device, that limitation is noted instead of
+claimed as verified.
+
+| # | Task | Status | Note |
+|---|---|---|---|
+| 1 | Repo, Expo app, Supabase project, CI, migration pipeline | done | Git repo initialized. Expo app scaffolded: theme (tokens.ts, matches logo), base components, Supabase client, i18n, Zustand auth-session store, full navigation shell (all §10 routes registered, unbuilt ones show a tagged placeholder). Typecheck/lint/vitest all clean; `expo export --platform android` bundles 1076 modules with no errors — the closest available proxy for "boots" in this environment (no device/emulator here). CI workflow added (`.github/workflows/ci.yml`). Supabase project itself is code-only — not run, see backend/README.md. |
+| 2 | Core tables (4.1–4.4) + seed roles/permissions/leave types/subjects | done | All tables from §4.1–4.4 migrated, plus `audit_log` and `leave_types` pulled forward (both needed by this task's own seed/audit requirements). `has_permission()`/`current_staff_id()` implemented verbatim from §5.3. Seed files for roles/permissions/role_permissions/grades/subjects/leave_types/school_settings, plus a reduced-scale dev sample dataset (§13). pgTAP test file with 9 hand-written `has_permission` cases. **Not executed against a live Postgres** — no Supabase CLI/Docker in this environment; verified by review only. Run `supabase db reset && supabase test db` per backend/README.md to confirm. |
+| 3 | Auth: sign in, first-password set, reset by OTP, session handling | not started | |
+| 4 | RLS policies for all tables, with pgTAP tests | not started | |
+| 5 | Spreadsheet import for students, guardians, staff, classes | not started | |
+| 6 | Academic calendar + `is_school_day` | not started | |
+| 7 | Student and staff directories, search, profile shell | not started | |
+| 8 | Offline engine: SQLite queue, sync loop, idempotency | not started | |
+| 9 | Mark attendance, submit, edit window, confirmation | not started | |
+| 10 | Attendance board, class drill-down, remind unmarked | not started | |
+| 11 | Scheduled jobs: reminder, escalation, lock, risk detection | not started | |
+| 12 | Early leave, staff check-in, staff attendance board | not started | |
+| 13 | Leave: request, balances, approval, cover assignment | not started | |
+| 14 | Marks: sheets, entry, lock, reopen, averages, trends | not started | |
+| 15 | Achievements, memberships, benefits, student timeline | not started | |
+| 16 | Announcements: compose, audience, push, read receipts | not started | |
+| 17 | Responsibilities and duty roster | not started | |
+| 18 | Inventory: items, transactions, derived quantity, low stock | not started | |
+| 19 | Events, reminders, school diary | not started | |
+| 20 | Analytics, summaries job, exports | not started | |
+| 21 | User accounts, role assignment with scope, audit log viewer | not started | |
+| 22 | Settings, notification preferences, i18n extraction | not started | |
+| 23 | Hardening: rate limiting, backup restore test, accessibility pass | not started | |
+
+### Known deviations from this document
+
+- **Repository layout** (§3): client under `apps/admin`, backend under
+  `backend`, not `/app` + `/supabase` at repo root. Reason: that layout
+  already existed in the repo before this build started.
+- **No live Supabase project in the build environment**: migrations, Edge
+  Functions, and pgTAP tests are written to the Supabase CLI's expected
+  layout but not executed here (no CLI/Docker/Postgres available). See
+  `backend/README.md` for the commands to run them locally.

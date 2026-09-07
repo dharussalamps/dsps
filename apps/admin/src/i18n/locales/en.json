@@ -1,0 +1,41 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "save": "Save",
+    "submit": "Submit",
+    "signOut": "Sign out",
+    "offline": "Offline",
+    "synced": "Synced",
+    "syncPending": "{{count}} pending",
+    "syncError": "Couldn't sync — tap to retry"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "email": "Email or staff number",
+    "password": "Password",
+    "forgotPassword": "Forgot password?",
+    "signInError": "Couldn't sign in. Check your details and try again.",
+    "setPasswordTitle": "Set your password",
+    "setPasswordHint": "This is your first sign-in — choose a password to continue.",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm password"
+  },
+  "nav": {
+    "home": "Home",
+    "students": "Students",
+    "attendance": "Attendance",
+    "announcements": "Announcements",
+    "more": "More"
+  },
+  "home": {
+    "title": "Home",
+    "myClassCard": "My class attendance",
+    "sectionStatus": "Section status",
+    "schoolPulse": "School pulse",
+    "needsAttention": "Needs attention",
+    "today": "Today",
+    "quickActions": "Quick actions"
+  }
+}
