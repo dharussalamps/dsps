@@ -38,6 +38,47 @@ export async function getStaffProfile(staffId: string): Promise<StaffSummary | n
   return data ? toStaffSummary(data) : null;
 }
 
+export async function fetchCurrentAcademicYearId(): Promise<string | null> {
+  const { data, error } = await supabase.from('academic_years').select('id').eq('is_current', true).maybeSingle();
+  if (error) throw error;
+  return data?.id ?? null;
+}
+
+export type Responsibility = { id: string; staffId: string; staffName: string; title: string; position: string | null; scheduleNote: string | null };
+
+export async function fetchResponsibilitiesForStaff(staffId: string): Promise<Responsibility[]> {
+  const { data, error } = await supabase
+    .from('responsibilities')
+    .select('id, staff_id, title, position, schedule_note, staff!responsibilities_staff_id_fkey(full_name)')
+    .eq('staff_id', staffId)
+    .returns<{ id: string; staff_id: string; title: string; position: string | null; schedule_note: string | null; staff: { full_name: string } | null }[]>();
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ id: r.id, staffId: r.staff_id, staffName: r.staff?.full_name ?? '', title: r.title, position: r.position, scheduleNote: r.schedule_note }));
+}
+
+/** "Same data reachable from person and from duty" — the duty roster view (task 17's completion test). */
+export async function fetchDutyRoster(): Promise<Responsibility[]> {
+  const { data, error } = await supabase
+    .from('responsibilities')
+    .select('id, staff_id, title, position, schedule_note, staff!responsibilities_staff_id_fkey(full_name)')
+    .order('title')
+    .returns<{ id: string; staff_id: string; title: string; position: string | null; schedule_note: string | null; staff: { full_name: string } | null }[]>();
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ id: r.id, staffId: r.staff_id, staffName: r.staff?.full_name ?? '', title: r.title, position: r.position, scheduleNote: r.schedule_note }));
+}
+
+export async function assignResponsibility(input: { staffId: string; title: string; position?: string; scheduleNote?: string; academicYearId: string; assignedBy: string }): Promise<void> {
+  const { error } = await supabase.from('responsibilities').insert({
+    staff_id: input.staffId,
+    title: input.title,
+    position: input.position || null,
+    schedule_note: input.scheduleNote || null,
+    academic_year_id: input.academicYearId,
+    assigned_by: input.assignedBy,
+  });
+  if (error) throw error;
+}
+
 function toStaffSummary(row: {
   id: string;
   staff_no: string;

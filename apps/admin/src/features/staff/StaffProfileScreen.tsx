@@ -3,14 +3,17 @@ import { ActivityIndicator, Linking, Text, View } from 'react-native';
 import { Button, Card, EmptyState, Screen, ScreenHeader, StatusPill } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
 import { semantic, spacing, typography } from '@/theme/tokens';
+import { ResponsibilitiesSection } from './ResponsibilitiesSection';
 import { useStaffProfile } from './hooks';
 
 type Route = RouteProp<RootStackParamList, 'StaffProfile'>;
 
+// Attendance/leave history for an arbitrary staff member (as opposed to
+// one's own, via Home's check-in card and MyLeave) doesn't have a screen
+// yet — section 10 gates it on staff.view_full but doesn't name a route.
 const upcomingSections = [
-  { label: 'Attendance', buildTask: 12 },
-  { label: 'Responsibilities', buildTask: 17 },
-  { label: 'Leave', buildTask: 13 },
+  { label: 'Attendance history', buildTask: null as number | null },
+  { label: 'Leave history', buildTask: null as number | null },
 ];
 
 export function StaffProfileScreen() {
@@ -48,6 +51,8 @@ export function StaffProfileScreen() {
         ) : null}
       </Card>
 
+      <ResponsibilitiesSection staffId={s.id} />
+
       <Card>
         <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>
           MORE ABOUT THIS STAFF MEMBER
@@ -58,7 +63,7 @@ export function StaffProfileScreen() {
             style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs }}
           >
             <Text style={{ ...typography.body, color: semantic.textPrimary }}>{section.label}</Text>
-            <StatusPill label={`Build task ${section.buildTask}`} tone="gold" />
+            <StatusPill label={section.buildTask ? `Build task ${section.buildTask}` : 'Not built yet'} tone="gold" />
           </View>
         ))}
       </Card>
