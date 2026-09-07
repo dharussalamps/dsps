@@ -1,5 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import {
+  fetchAchievements,
+  fetchBenefits,
+  fetchMemberships,
   getStudentGuardians,
   getStudentProfile,
   listClasses,
@@ -40,6 +43,30 @@ export function useStudentGuardians(studentId: string | undefined) {
   return useQuery({
     queryKey: ['students', 'guardians', studentId],
     queryFn: () => getStudentGuardians(studentId as string),
+    enabled: !!studentId,
+  });
+}
+
+export function useAchievements(studentId: string | undefined) {
+  return useQuery({
+    queryKey: ['students', 'achievements', studentId],
+    queryFn: () => fetchAchievements(studentId as string),
+    enabled: !!studentId,
+  });
+}
+
+export function useMemberships(studentId: string | undefined) {
+  return useQuery({
+    queryKey: ['students', 'memberships', studentId],
+    queryFn: () => fetchMemberships(studentId as string),
+    enabled: !!studentId,
+  });
+}
+
+export function useBenefits(studentId: string | undefined) {
+  return useQuery({
+    queryKey: ['students', 'benefits', studentId],
+    queryFn: () => fetchBenefits(studentId as string),
     enabled: !!studentId,
   });
 }

@@ -4,15 +4,16 @@ import { Button, Card, EmptyState, Screen, ScreenHeader, StatusPill } from '@/co
 import { useStudentMarks } from '@/features/marks/hooks';
 import type { RootStackParamList } from '@/navigation/types';
 import { semantic, spacing, typography } from '@/theme/tokens';
+import { ActivitySection } from './ActivitySection';
+import { BenefitsSection } from './BenefitsSection';
 import { useStudentGuardians, useStudentProfile } from './hooks';
 
 type Route = RouteProp<RootStackParamList, 'StudentProfile'>;
 
-const upcomingTabs = [
-  { label: 'Attendance', buildTask: 9 },
-  { label: 'Activity', buildTask: 15 },
-  { label: 'Benefits', buildTask: 15 },
-];
+// StudentAttendanceTab (section 10: monthly calendar, term %, absence
+// records) isn't its own numbered build task — attendance.mark/view_board
+// screens exist (task 9-10), but this specific calendar view is still open.
+const upcomingTabs = [{ label: 'Attendance history (calendar view)', buildTask: null as number | null }];
 
 export function StudentProfileScreen() {
   const { params } = useRoute<Route>();
@@ -93,6 +94,9 @@ export function StudentProfileScreen() {
         </Card>
       ) : null}
 
+      <ActivitySection studentId={s.id} />
+      <BenefitsSection studentId={s.id} />
+
       <Card>
         <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>MORE ABOUT THIS STUDENT</Text>
         {upcomingTabs.map((tab) => (
@@ -101,7 +105,7 @@ export function StudentProfileScreen() {
             style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs }}
           >
             <Text style={{ ...typography.body, color: semantic.textPrimary }}>{tab.label}</Text>
-            <StatusPill label={`Build task ${tab.buildTask}`} tone="gold" />
+            <StatusPill label={tab.buildTask ? `Build task ${tab.buildTask}` : 'Not built yet'} tone="gold" />
           </View>
         ))}
       </Card>

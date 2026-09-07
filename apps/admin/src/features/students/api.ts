@@ -154,6 +154,70 @@ export async function getStudentGuardians(studentId: string): Promise<GuardianCo
   }));
 }
 
+export type Achievement = { id: string; title: string; category: string | null; level: string | null; achievedOn: string };
+export type Membership = { id: string; groupName: string; position: string | null; startedOn: string | null; endedOn: string | null };
+export type Benefit = { id: string; scheme: string; status: 'pending' | 'issued' | 'active' | 'ended'; issuedOn: string | null; notes: string | null };
+
+export async function fetchAchievements(studentId: string): Promise<Achievement[]> {
+  const { data, error } = await supabase
+    .from('achievements')
+    .select('id, title, category, level, achieved_on')
+    .eq('student_id', studentId)
+    .order('achieved_on', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ id: r.id, title: r.title, category: r.category, level: r.level, achievedOn: r.achieved_on }));
+}
+
+export async function addAchievement(input: { studentId: string; title: string; category?: string; level?: string; achievedOn: string; recordedBy: string }): Promise<void> {
+  const { error } = await supabase.from('achievements').insert({
+    student_id: input.studentId,
+    title: input.title,
+    category: input.category || null,
+    level: input.level || null,
+    achieved_on: input.achievedOn,
+    recorded_by: input.recordedBy,
+  });
+  if (error) throw error;
+}
+
+export async function fetchMemberships(studentId: string): Promise<Membership[]> {
+  const { data, error } = await supabase
+    .from('memberships')
+    .select('id, group_name, position, started_on, ended_on')
+    .eq('student_id', studentId)
+    .order('started_on', { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ id: r.id, groupName: r.group_name, position: r.position, startedOn: r.started_on, endedOn: r.ended_on }));
+}
+
+export async function addMembership(input: { studentId: string; groupName: string; position?: string; startedOn?: string }): Promise<void> {
+  const { error } = await supabase.from('memberships').insert({
+    student_id: input.studentId,
+    group_name: input.groupName,
+    position: input.position || null,
+    started_on: input.startedOn || null,
+  });
+  if (error) throw error;
+}
+
+/** [] both when there are none and when the caller lacks student.view_benefits — RLS, not an error, tells them apart. */
+export async function fetchBenefits(studentId: string): Promise<Benefit[]> {
+  const { data, error } = await supabase
+    .from('benefits')
+    .select('id, scheme, status, issued_on, notes')
+    .eq('student_id', studentId);
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ id: r.id, scheme: r.scheme, status: r.status as Benefit['status'], issuedOn: r.issued_on, notes: r.notes }));
+}
+
+export async function markBenefitIssued(benefitId: string, staffId: string): Promise<void> {
+  const { error } = await supabase
+    .from('benefits')
+    .update({ status: 'issued', issued_on: new Date().toISOString().slice(0, 10), issued_by: staffId })
+    .eq('id', benefitId);
+  if (error) throw error;
+}
+
 function toStudentSummary(row: StudentRow): StudentSummary {
   return {
     id: row.id,
