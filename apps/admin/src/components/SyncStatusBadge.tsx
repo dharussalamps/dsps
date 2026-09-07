@@ -4,6 +4,11 @@ import { useSyncStore } from '@/store/syncStore';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { drainQueue } from '@/lib/offline/queue';
 
+// The pill itself stays visually compact; hitSlop pads the actual tappable
+// area out to the 44dp minimum (section 14, Definition of done) without
+// changing how it looks. ~26px tall pill + 9px on each side clears 44.
+const RETRY_HIT_SLOP = { top: 9, bottom: 9, left: 9, right: 9 };
+
 /**
  * Always-visible sync indicator (AdminSpec.md section 9, rule 5): a synced
  * tick, a pending badge with count, or an error banner — "the user must
@@ -16,7 +21,7 @@ export function SyncStatusBadge() {
 
   if (hasStuckError) {
     return (
-      <Pressable onPress={() => void drainQueue()} style={[styles.base, styles.error]}>
+      <Pressable onPress={() => void drainQueue()} hitSlop={RETRY_HIT_SLOP} style={[styles.base, styles.error]}>
         <Text style={styles.errorText}>{t('common.syncError')}</Text>
       </Pressable>
     );

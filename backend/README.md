@@ -49,6 +49,35 @@ supabase functions deploy <function-name>
 supabase db push
 ```
 
+## Before going to production (build task 23: hardening)
+
+A few things a migration can't do for you — treat this as a checklist for
+whoever takes this to a real, hosted Supabase project:
+
+- **Auth rate limits.** Supabase's OTP/sign-in rate limits are dashboard
+  settings (Authentication → Rate Limits), not something a migration
+  configures. The platform defaults are sane; review them for your
+  expected staff count before launch. Application-level rate limiting for
+  the functions this build added (announcements, manual attendance
+  reminders) *is* implemented — see `check_rate_limit()` in
+  `supabase/migrations/20260907220001_rate_limiting.sql`.
+- **Backup/restore drill.** Not something this build environment could
+  test (no live project). Once hosted: enable point-in-time recovery or
+  scheduled backups in the Supabase dashboard, then actually restore into
+  a scratch project and confirm the app can point at it — an untested
+  backup is not a backup.
+- **RLS coverage.** Verified in this repo: every table created by these
+  migrations has `enable row level security` — see the `create table`
+  vs. `enable row level security` counts, which match exactly (43/43) as
+  of this writing. Keep that invariant as new tables are added; a table
+  without RLS enabled is readable by anyone with the anon key.
+- **Accessibility.** Tap targets go through `Button`/`Card`, both built to
+  the 44dp minimum; `SyncStatusBadge`'s retry pill uses `hitSlop` to clear
+  it despite a visually smaller footprint. Every `StatusPill` tone's text
+  color was checked against its background for ≥4.5:1 contrast (WCAG AA);
+  three (`success`, `warning`, `info`) were originally too light and were
+  darkened — see the comment in `apps/admin/src/theme/tokens.ts`.
+
 ## Status
 
 Not yet executed in this repository's build environment — no Supabase CLI

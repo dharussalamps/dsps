@@ -57,11 +57,20 @@ function ClassBoard({ onDate, onOpenClass }: { onDate: string; onOpenClass: (cla
   const status = useMarkingStatus(onDate);
   const queryClient = useQueryClient();
   const [reminding, setReminding] = useState<string | null>(null);
+  const [remindError, setRemindError] = useState<string | null>(null);
 
   async function remind(classId: string) {
     setReminding(classId);
+    setRemindError(null);
     try {
       await remindUnmarkedClass(classId);
+    } catch (err: unknown) {
+      const message = (err as { message?: string })?.message ?? '';
+      setRemindError(
+        message.includes('rate_limited')
+          ? 'Already reminded recently — try again in a couple of minutes.'
+          : "Couldn't send the reminder.",
+      );
     } finally {
       setReminding(null);
       await queryClient.invalidateQueries({ queryKey: ['attendance', 'marking-status'] });
@@ -75,6 +84,9 @@ function ClassBoard({ onDate, onOpenClass }: { onDate: string; onOpenClass: (cla
       data={status.data ?? []}
       keyExtractor={(item) => item.classId}
       contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm, paddingBottom: spacing.xl }}
+      ListHeaderComponent={
+        remindError ? <Text style={{ ...typography.caption, color: semantic.textSecondary, marginBottom: spacing.sm }}>{remindError}</Text> : null
+      }
       ListEmptyComponent={<EmptyState title="No classes in scope" />}
       renderItem={({ item }) => (
         <Card onPress={() => onOpenClass(item.classId)} flat>

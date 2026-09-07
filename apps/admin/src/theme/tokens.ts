@@ -34,13 +34,19 @@ export const colors = {
 
   white: '#FFFFFF',
 
-  success: '#1E8E5A',
+  // success/warning/info were originally lighter (#1E8E5A / #B4750B /
+  // #2B6FC2) and read fine by eye, but measured under 4.5:1 against their
+  // *Bg pairs — 3.66 / 3.39 / 4.36 respectively, all failing WCAG AA for
+  // the 13px bold text StatusPill actually renders (build task 23's
+  // accessibility pass; see docs/AdminSpec.md section 17). Darkened here
+  // to 5.77 / 5.26 / 5.88, verified against these exact backgrounds.
+  success: '#146B44',
   successBg: '#E4F5EC',
-  warning: '#B4750B',
+  warning: '#8A5A00',
   warningBg: '#FCF0DC',
   error: '#C22B2B',
   errorBg: '#FBE7E7',
-  info: '#2B6FC2',
+  info: '#1F5AA8',
   infoBg: '#E7EFFB',
 } as const;
 

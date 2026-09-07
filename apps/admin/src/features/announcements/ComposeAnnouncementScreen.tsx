@@ -66,8 +66,13 @@ export function ComposeAnnouncementScreen() {
     try {
       await composeAnnouncement({ title: title.trim(), body: body.trim(), audience, audienceIds: selectedIds });
       navigation.goBack();
-    } catch {
-      setError('Could not publish this announcement.');
+    } catch (err: unknown) {
+      const message = (err as { message?: string })?.message ?? '';
+      setError(
+        message.includes('rate_limited')
+          ? "You've published a lot of announcements in the last hour — try again shortly."
+          : 'Could not publish this announcement.',
+      );
     } finally {
       setSubmitting(false);
     }

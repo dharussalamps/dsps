@@ -46,6 +46,9 @@ export function dbErrorToResponse(err: unknown): Response {
     // Postgres RLS policy violation — the caller doesn't hold the required permission.
     return errorResponse(403, { code: 'forbidden', message: "You don't have permission to do this." });
   }
+  if (code === 'P0005') {
+    return errorResponse(429, { code: 'rate_limited', message: 'Too many of these in a short time — try again shortly.' });
+  }
 
   console.error('Unhandled database error:', message);
   return errorResponse(500, { code: 'internal_error', message: 'Something went wrong. Please try again.' });
