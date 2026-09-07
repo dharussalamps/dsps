@@ -6,3 +6,4 @@ export type { PillTone } from './StatusPill';
 export { TextField } from './TextField';
 export { ScreenHeader } from './ScreenHeader';
 export { EmptyState } from './EmptyState';
+export { SyncStatusBadge } from './SyncStatusBadge';

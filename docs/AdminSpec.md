@@ -1069,7 +1069,8 @@ claimed as verified.
 | 5 | Spreadsheet import for students, guardians, staff, classes | not started | |
 | 6 | Academic calendar + `is_school_day` | in progress | `is_school_day()` implemented verbatim from §6.1. The `AcademicCalendar`/`CalendarDayEditor` screens (principal-only editing) are still placeholders. |
 | 7 | Student and staff directories, search, profile shell | done | `StudentSearch` (search by name/admission number + browse-by-class), `ClassDetail` (roster), `StudentProfile` (basic info + guardians, gated automatically by RLS + `student_guardians_contact`; Attendance/Marks/Activity/Benefits sections shown as "coming with task N"), `StaffDirectory` and `StaffProfile` (basic info; Attendance/Responsibilities/Leave similarly deferred). All read through TanStack Query hooks calling Supabase directly — no client-side permission gating built yet (out of scope until Home needs it, per the plan); screens simply show whatever RLS returns, with an empty state otherwise. |
-| 8 | Offline engine: SQLite queue, sync loop, idempotency | not started | |
+| 8 | Offline engine: SQLite queue, sync loop, idempotency | done | `pending_operations` table (section 9) via `expo-sqlite`, plus a `last_attempt_at` column not in the spec's schema — needed to compute exponential backoff across app restarts, see below. `enqueueOperation`/`drainQueue`/`manualRetry`/`registerOperationHandler` in `src/lib/offline/queue.ts`; the retry/backoff/24h-stuck decisions are pure functions in `backoff.ts` (vitest-covered — native SQLite/Crypto imports can't run under Vitest, so the math is kept separate from the DB code that uses it). Drain triggers wired per rule 2 (foreground, network regain via `expo-network`'s listener, 60s interval) in `useSyncEngine()`, mounted at the app root. `SyncStatusBadge` component for rule 5 (tick / pending count / error banner), not yet placed on any screen since none offline-capable exist until task 9. Idempotency: `pending_operations.id` **is** the `client_submission_id`, generated with `expo-crypto`; no handlers registered yet (nothing to submit until task 9), so end-to-end drain behavior is unverified — the queue/backoff logic itself is unit-tested. |
+| 9 | Mark attendance, submit, edit window, confirmation | not started | |
 | 9 | Mark attendance, submit, edit window, confirmation | not started | |
 | 10 | Attendance board, class drill-down, remind unmarked | not started | |
 | 11 | Scheduled jobs: reminder, escalation, lock, risk detection | not started | |
@@ -1107,3 +1108,9 @@ claimed as verified.
   channel. Implemented over phone/SMS rather than email, because
   `staff.phone` is required and `staff.email` is optional (section 4.3) —
   an email-only reset would lock out any staff member without one on file.
+- **Offline queue schema**: section 9's `pending_operations` table gains
+  one column beyond what's listed, `last_attempt_at integer`. Rule 3's
+  exponential backoff "up to 24 hours" can't be computed correctly across
+  app restarts from `attempts` and `created_at` alone — there's no way to
+  know when the *last* try happened, only the first. See `src/lib/offline/
+  backoff.ts`.

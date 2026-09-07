@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useSyncEngine } from '@/lib/offline';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { colors, semantic } from '@/theme/tokens';
 
@@ -31,6 +32,8 @@ const queryClient = new QueryClient({
 });
 
 export default function App() {
+  useSyncEngine();
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
