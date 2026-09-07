@@ -1,11 +1,6 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 
-/**
- * Every route in AdminSpec.md section 10. Screens not yet built (see
- * docs/AdminSpec.md section 17 for status) render <PlaceholderScreen /> —
- * registering the full route table now means the navigation shell and IA
- * never need to change shape as each screen is filled in.
- */
+/** Every route in AdminSpec.md section 10; see docs/AdminSpec.md section 17 for what each screen actually covers. */
 export type TabParamList = {
   Home: undefined;
   StudentSearch: undefined;

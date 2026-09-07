@@ -5,6 +5,8 @@ import { MarkAttendanceScreen } from '@/features/attendance/MarkAttendanceScreen
 import { AuditLogScreen } from '@/features/accounts/AuditLogScreen';
 import { UserAccountsScreen } from '@/features/accounts/UserAccountsScreen';
 import { AnalyticsScreen } from '@/features/analytics/AnalyticsScreen';
+import { AcademicCalendarScreen } from '@/features/calendar/AcademicCalendarScreen';
+import { CalendarDayEditorScreen } from '@/features/calendar/CalendarDayEditorScreen';
 import { EarlyLeaveScreen } from '@/features/earlyLeave/EarlyLeaveScreen';
 import { DiaryScreen } from '@/features/events/DiaryScreen';
 import { EventCalendarScreen } from '@/features/events/EventCalendarScreen';
@@ -16,12 +18,12 @@ import { LeaveRequestsScreen } from '@/features/leave/LeaveRequestsScreen';
 import { MyLeaveScreen } from '@/features/leave/MyLeaveScreen';
 import { MarkEntryScreen } from '@/features/marks/MarkEntryScreen';
 import { MarksReviewScreen } from '@/features/marks/MarksReviewScreen';
+import { SettingsScreen } from '@/features/settings/SettingsScreen';
 import { ClassDetailScreen } from '@/features/students/ClassDetailScreen';
 import { ClassListScreen } from '@/features/students/ClassListScreen';
 import { StudentProfileScreen } from '@/features/students/StudentProfileScreen';
 import { StaffDirectoryScreen } from '@/features/staff/StaffDirectoryScreen';
 import { StaffProfileScreen } from '@/features/staff/StaffProfileScreen';
-import { PlaceholderScreen } from '@/screens/PlaceholderScreen';
 import { colors, semantic } from '@/theme/tokens';
 import { TabsNavigator } from './TabsNavigator';
 import type { RootStackParamList } from './types';
@@ -35,10 +37,11 @@ const headerOptions = {
 };
 
 /**
- * Every screen in AdminSpec.md section 10 not yet built renders
- * PlaceholderScreen, tagged with the build task that replaces it (see
- * docs/AdminSpec.md section 17). Registered explicitly (rather than looped
- * from an array) so each screen keeps its own typed route params.
+ * Every screen in AdminSpec.md section 10 has a real component as of
+ * build task 22 — see docs/AdminSpec.md section 17 for what each task
+ * actually covers vs. still-open scope within a screen (e.g. permission-
+ * filtered visibility). Registered explicitly (rather than looped from an
+ * array) so each screen keeps its own typed route params.
  */
 export function AppNavigator() {
   return (
@@ -72,19 +75,13 @@ export function AppNavigator() {
       <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event' }} />
       <Stack.Screen name="Diary" component={DiaryScreen} options={{ title: 'School diary' }} />
 
-      <Stack.Screen name="AcademicCalendar" options={{ title: 'Academic calendar' }}>
-        {() => <PlaceholderScreen title="Academic calendar" buildTask={6} />}
-      </Stack.Screen>
-      <Stack.Screen name="CalendarDayEditor" options={{ title: 'Edit day' }}>
-        {() => <PlaceholderScreen title="Edit day" buildTask={6} />}
-      </Stack.Screen>
+      <Stack.Screen name="AcademicCalendar" component={AcademicCalendarScreen} options={{ title: 'Academic calendar' }} />
+      <Stack.Screen name="CalendarDayEditor" component={CalendarDayEditorScreen} options={{ title: 'Edit day' }} />
 
       <Stack.Screen name="Analytics" component={AnalyticsScreen} options={{ title: 'Analytics' }} />
       <Stack.Screen name="UserAccounts" component={UserAccountsScreen} options={{ title: 'User accounts' }} />
       <Stack.Screen name="AuditLog" component={AuditLogScreen} options={{ title: 'Audit log' }} />
-      <Stack.Screen name="Settings" options={{ title: 'Settings' }}>
-        {() => <PlaceholderScreen title="Settings" buildTask={22} />}
-      </Stack.Screen>
+      <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
     </Stack.Navigator>
   );
 }
