@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ComposeAnnouncementScreen } from '@/features/announcements/ComposeAnnouncementScreen';
 import { AttendanceSubmittedScreen } from '@/features/attendance/AttendanceSubmittedScreen';
 import { MarkAttendanceScreen } from '@/features/attendance/MarkAttendanceScreen';
+import { AnalyticsScreen } from '@/features/analytics/AnalyticsScreen';
 import { EarlyLeaveScreen } from '@/features/earlyLeave/EarlyLeaveScreen';
 import { DiaryScreen } from '@/features/events/DiaryScreen';
 import { EventCalendarScreen } from '@/features/events/EventCalendarScreen';
@@ -76,9 +77,7 @@ export function AppNavigator() {
         {() => <PlaceholderScreen title="Edit day" buildTask={6} />}
       </Stack.Screen>
 
-      <Stack.Screen name="Analytics" options={{ title: 'Analytics' }}>
-        {() => <PlaceholderScreen title="Analytics" buildTask={20} />}
-      </Stack.Screen>
+      <Stack.Screen name="Analytics" component={AnalyticsScreen} options={{ title: 'Analytics' }} />
       <Stack.Screen name="UserAccounts" options={{ title: 'User accounts' }}>
         {() => <PlaceholderScreen title="User accounts" buildTask={21} />}
       </Stack.Screen>
