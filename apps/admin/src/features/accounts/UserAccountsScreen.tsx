@@ -9,6 +9,7 @@ import { semantic, spacing, typography } from '@/theme/tokens';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { assignRole, createStaffAccount, setStaffStatus, type AccountRow } from './api';
 import { useAccounts, useRoles } from './hooks';
+import { ImportStudentsSection } from './ImportStudentsSection';
 
 type ScopeType = 'school' | 'grade' | 'class' | 'self';
 
@@ -28,6 +29,7 @@ export function UserAccountsScreen() {
   const queryClient = useQueryClient();
 
   const [creating, setCreating] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [staffNo, setStaffNo] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
@@ -80,7 +82,10 @@ export function UserAccountsScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background }} edges={['top', 'left', 'right']}>
       <View style={{ padding: spacing.lg, gap: spacing.md }}>
         <ScreenHeader title="User accounts">
-          <Button label={creating ? 'Cancel' : 'Create'} size="sm" onPress={() => setCreating((v) => !v)} />
+          <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+            <Button label={showImport ? 'Hide import' : 'Import'} size="sm" variant="outline" onPress={() => setShowImport((v) => !v)} />
+            <Button label={creating ? 'Cancel' : 'Create'} size="sm" onPress={() => setCreating((v) => !v)} />
+          </View>
         </ScreenHeader>
         {creating ? (
           <Card>
@@ -90,6 +95,7 @@ export function UserAccountsScreen() {
             <Button label="Save" onPress={() => void submitCreate()} loading={saving} />
           </Card>
         ) : null}
+        {showImport ? <ImportStudentsSection /> : null}
       </View>
 
       {accounts.isLoading ? (
