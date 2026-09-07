@@ -1,4 +1,6 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { AttendanceSubmittedScreen } from '@/features/attendance/AttendanceSubmittedScreen';
+import { MarkAttendanceScreen } from '@/features/attendance/MarkAttendanceScreen';
 import { ClassDetailScreen } from '@/features/students/ClassDetailScreen';
 import { ClassListScreen } from '@/features/students/ClassListScreen';
 import { StudentProfileScreen } from '@/features/students/StudentProfileScreen';
@@ -32,12 +34,8 @@ export function AppNavigator() {
       <Stack.Screen name="ClassDetail" component={ClassDetailScreen} options={{ title: 'Class' }} />
       <Stack.Screen name="StudentProfile" component={StudentProfileScreen} options={{ title: 'Student' }} />
 
-      <Stack.Screen name="MarkAttendance" options={{ title: 'Mark attendance' }}>
-        {() => <PlaceholderScreen title="Mark attendance" buildTask={9} />}
-      </Stack.Screen>
-      <Stack.Screen name="AttendanceSubmitted" options={{ title: 'Attendance submitted' }}>
-        {() => <PlaceholderScreen title="Attendance submitted" buildTask={9} />}
-      </Stack.Screen>
+      <Stack.Screen name="MarkAttendance" component={MarkAttendanceScreen} options={{ title: 'Mark attendance' }} />
+      <Stack.Screen name="AttendanceSubmitted" component={AttendanceSubmittedScreen} options={{ title: 'Attendance submitted' }} />
       <Stack.Screen name="EarlyLeave" options={{ title: 'Early leave' }}>
         {() => <PlaceholderScreen title="Early leave" buildTask={12} />}
       </Stack.Screen>

@@ -22,7 +22,12 @@ export type RootStackParamList = {
   StudentProfile: { studentId: string };
 
   MarkAttendance: { classId: string };
-  AttendanceSubmitted: { classId: string; onDate: string };
+  AttendanceSubmitted: {
+    classId: string;
+    onDate: string;
+    /** Instant local echo shown before the server-confirmed list (with consecutive-day counts) arrives — see MarkAttendanceScreen. */
+    localAbsentees?: { studentId: string; fullName: string }[];
+  };
   EarlyLeave: { classId: string };
 
   MarkEntry: { classId: string; subjectId: string; termId: string };

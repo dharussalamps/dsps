@@ -3,8 +3,10 @@ import '@/i18n';
 import { DefaultTheme, NavigationContainer, Theme } from '@react-navigation/native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { initAttendanceOffline } from '@/features/attendance/init';
 import { useSyncEngine } from '@/lib/offline';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { colors, semantic } from '@/theme/tokens';
@@ -33,6 +35,9 @@ const queryClient = new QueryClient({
 
 export default function App() {
   useSyncEngine();
+  useEffect(() => {
+    void initAttendanceOffline();
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
