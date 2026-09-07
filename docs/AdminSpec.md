@@ -1,0 +1,1025 @@
+# School Admin App — AI Build Specification
+
+**Companion to:** Software Requirements Specification v1.0
+**Audience:** an AI coding agent, or a developer working with one
+**Status:** authoritative for implementation
+
+---
+
+## 0. How to use this document
+
+This document is written to be handed to an AI agent as the source of truth for building the system. It differs from the SRS in that it states decisions rather than describing intentions.
+
+Rules for the agent:
+
+1. **Do not invent scope.** If something is not in this document, it is not in the build. Ask rather than assume.
+2. **Build in the order given in section 12.** Each task has a completion test. Do not begin a task until the previous one passes its test.
+3. **Every rule in section 5 (permissions) and section 6 (derived logic) is enforced server-side.** Client-side hiding of controls is presentation, never protection.
+4. **Where this document conflicts with the SRS, this document wins** on implementation detail; the SRS wins on intent.
+5. **Open decisions are listed in section 15.** Where one blocks a task, implement the stated default and make it configurable.
+
+---
+
+## 1. Product summary
+
+A mobile application used by the staff of a primary school of ~900 students (grades 1–5, ~30 classes) and ~35 staff. It replaces paper attendance registers and spreadsheet record-keeping.
+
+The single most important flow: **a class teacher marks attendance for ~35 students in under 30 seconds, on a phone, possibly with no network.** Every other decision is subordinate to this one.
+
+A parent-facing app is a later phase and is out of scope, except that the guardian data model must support it without change.
+
+### Non-negotiables
+
+| Rule | Reason |
+|---|---|
+| Attendance marking works fully offline | Classroom connectivity is unreliable; a lost marking session ends adoption |
+| Roster defaults to all-present | Marking 35 students individually takes too long |
+| Permissions are scoped data, not code branches | The school will invent new roles |
+| Nothing scheduled runs on a non-school day | A holiday must not produce 900 absence records |
+| Every write is audited | Attendance and marks are records of consequence |
+
+---
+
+## 2. Technology decisions
+
+These are fixed. Do not substitute.
+
+| Concern | Decision |
+|---|---|
+| Mobile client | React Native (Expo managed workflow) |
+| Language | TypeScript, strict mode |
+| Backend | Supabase — PostgreSQL, GoTrue auth, Row Level Security, Storage, Edge Functions, pg_cron |
+| Local database (offline) | SQLite via `expo-sqlite`, wrapped in a sync queue |
+| State | TanStack Query for server state; Zustand for local UI state |
+| Navigation | React Navigation — bottom tabs + native stack |
+| Forms | React Hook Form with Zod schemas shared between client and Edge Functions |
+| Push | Expo Notifications over FCM and APNs |
+| Dates | `date-fns` with `date-fns-tz`. Store `timestamptz`; school timezone in `school_settings` |
+| Testing | Vitest for logic, React Native Testing Library for components, pgTAP for RLS policies |
+| Migrations | Supabase CLI migrations, versioned in the repo |
+
+### Rules of construction
+
+- **No business logic in the client.** Permission checks, school-day derivation, attendance locking and risk detection all live in Postgres functions or Edge Functions.
+- **No `select *` from the client.** Query explicit columns so RLS column exposure stays deliberate.
+- **Every table has RLS enabled.** A table without a policy is unreadable, which is the correct default.
+- **All money-like and time-like config is data.** Deadlines, thresholds and entitlements live in `school_settings` and `leave_types`, never as literals.
+
+---
+
+## 3. Repository layout
+
+```
+/app                    Expo React Native application
+  /src
+    /screens            One folder per screen, named as in section 10
+    /components         Shared presentational components
+    /features           Feature modules: attendance, marks, leave, inventory...
+    /lib
+      supabase.ts       Client initialisation
+      offline/          SQLite queue, sync engine, conflict handling
+      permissions.ts    Client-side mirror of permission checks (display only)
+    /i18n               Resource bundles; no user-facing string in code
+/supabase
+  /migrations           Versioned SQL, one file per change
+  /functions            Edge Functions
+  /seed                 Reference data: roles, permissions, leave types, subjects
+  /tests                pgTAP policy tests
+/docs
+  SRS.html              The requirements specification
+  build-spec.md         This document
+```
+
+---
+
+## 4. Data model
+
+Conventions: `uuid` primary keys defaulting to `gen_random_uuid()`; `created_at timestamptz not null default now()`; `updated_at` maintained by trigger; soft deletion via a `status` column, never a hard `DELETE` on records of consequence.
+
+### 4.1 Calendar and configuration
+
+```sql
+create table academic_years (
+  id            uuid primary key default gen_random_uuid(),
+  label         text not null unique,           -- '2026'
+  starts_on     date not null,
+  ends_on       date not null,
+  is_current    boolean not null default false,
+  check (ends_on > starts_on)
+);
+create unique index one_current_year on academic_years (is_current) where is_current;
+
+create table terms (
+  id                 uuid primary key default gen_random_uuid(),
+  academic_year_id   uuid not null references academic_years on delete cascade,
+  name               text not null,             -- 'Term 1'
+  sequence           smallint not null,
+  starts_on          date not null,
+  ends_on            date not null,
+  check (ends_on >= starts_on),
+  unique (academic_year_id, sequence)
+);
+-- terms within a year must not overlap: enforced by exclusion constraint
+alter table terms add constraint terms_no_overlap
+  exclude using gist (
+    academic_year_id with =,
+    daterange(starts_on, ends_on, '[]') with &&
+  );
+
+create type day_type as enum ('school','holiday','half_day','exam','closure');
+
+create table calendar_days (
+  id            uuid primary key default gen_random_uuid(),
+  on_date       date not null unique,
+  day_type      day_type not null,
+  label         text,
+  created_by    uuid references staff,
+  created_at    timestamptz not null default now()
+);
+-- Only overrides are stored. Absence of a row means "derive from term + working days".
+
+create table school_settings (
+  id                       boolean primary key default true check (id),
+  school_name              text not null,
+  timezone                 text not null default 'Asia/Colombo',
+  working_weekdays         smallint[] not null default '{1,2,3,4,5}',  -- ISO: 1=Mon
+  day_starts_at            time not null default '07:30',
+  day_ends_at              time not null default '13:30',
+  attendance_due_at        time not null default '08:30',
+  attendance_edit_minutes  smallint not null default 60,
+  staff_late_after         time not null default '07:45',
+  risk_consecutive_days    smallint not null default 3,
+  risk_attendance_pct      numeric(5,2) not null default 80.00
+);
+```
+
+### 4.2 Structure
+
+```sql
+create table grades (
+  id        uuid primary key default gen_random_uuid(),
+  number    smallint not null unique,       -- 1..5
+  name      text not null
+);
+
+create table classes (
+  id                uuid primary key default gen_random_uuid(),
+  grade_id          uuid not null references grades,
+  academic_year_id  uuid not null references academic_years,
+  name              text not null,          -- '4B'
+  class_teacher_id  uuid references staff,
+  unique (academic_year_id, name)
+);
+
+create table subjects (
+  id       uuid primary key default gen_random_uuid(),
+  name     text not null,
+  code     text unique
+);
+
+create table grade_subjects (
+  grade_id    uuid references grades,
+  subject_id  uuid references subjects,
+  primary key (grade_id, subject_id)
+);
+
+create table class_subject_teachers (
+  id           uuid primary key default gen_random_uuid(),
+  class_id     uuid not null references classes on delete cascade,
+  subject_id   uuid not null references subjects,
+  staff_id     uuid not null references staff,
+  unique (class_id, subject_id)
+);
+```
+
+### 4.3 People
+
+```sql
+create type person_status as enum ('active','inactive','left');
+
+create table students (
+  id                uuid primary key default gen_random_uuid(),
+  admission_no      text not null unique,
+  full_name         text not null,
+  preferred_name    text,
+  date_of_birth     date,
+  photo_path        text,
+  photo_consent     boolean not null default false,
+  status            person_status not null default 'active',
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create table student_enrolments (
+  id                uuid primary key default gen_random_uuid(),
+  student_id        uuid not null references students on delete cascade,
+  class_id          uuid not null references classes,
+  academic_year_id  uuid not null references academic_years,
+  roll_no           text,
+  unique (student_id, academic_year_id)
+);
+-- A student's class is always read through the enrolment for the current year.
+-- Promotion inserts a new row; it never overwrites the previous one.
+
+create table guardians (
+  id             uuid primary key default gen_random_uuid(),
+  full_name      text not null,
+  relationship   text,                       -- 'father','mother','grandmother'
+  phone_primary  text not null,
+  phone_alt      text,
+  address        text,
+  status         person_status not null default 'active'
+);
+
+create table student_guardians (
+  student_id   uuid references students on delete cascade,
+  guardian_id  uuid references guardians on delete cascade,
+  is_primary   boolean not null default false,
+  primary key (student_id, guardian_id)
+);
+create unique index one_primary_guardian
+  on student_guardians (student_id) where is_primary;
+
+create table staff (
+  id            uuid primary key default gen_random_uuid(),
+  auth_user_id  uuid unique,                 -- links to auth.users
+  staff_no      text not null unique,
+  full_name     text not null,
+  phone         text not null,
+  email         text,
+  joined_on     date,
+  status        person_status not null default 'active',
+  created_at    timestamptz not null default now()
+);
+```
+
+### 4.4 Roles, permissions and scope
+
+```sql
+create table roles (
+  id           uuid primary key default gen_random_uuid(),
+  key          text not null unique,   -- 'principal','sectional_head','class_teacher',
+                                       -- 'administrator','staff','vice_principal'
+  name         text not null,
+  is_system    boolean not null default false
+);
+
+create table permissions (
+  key          text primary key,       -- 'attendance.mark', 'leave.approve'
+  description  text not null
+);
+
+create table role_permissions (
+  role_id         uuid references roles on delete cascade,
+  permission_key  text references permissions on delete cascade,
+  primary key (role_id, permission_key)
+);
+
+create type scope_type as enum ('school','grade','class','self');
+
+create table staff_roles (
+  id            uuid primary key default gen_random_uuid(),
+  staff_id      uuid not null references staff on delete cascade,
+  role_id       uuid not null references roles,
+  scope_type    scope_type not null,
+  scope_id      uuid,                  -- null when scope_type = 'school' or 'self'
+  granted_by    uuid references staff,
+  granted_at    timestamptz not null default now(),
+  revoked_at    timestamptz,
+  check ((scope_type in ('school','self')) = (scope_id is null))
+);
+
+create table cover_assignments (
+  id            uuid primary key default gen_random_uuid(),
+  class_id      uuid not null references classes,
+  staff_id      uuid not null references staff,
+  starts_on     date not null,
+  ends_on       date not null,
+  reason        text,
+  assigned_by   uuid not null references staff,
+  created_at    timestamptz not null default now(),
+  check (ends_on >= starts_on)
+);
+```
+
+### 4.5 Attendance
+
+```sql
+create type attendance_status as enum ('present','absent','late');
+
+create table attendance_submissions (
+  id             uuid primary key default gen_random_uuid(),
+  class_id       uuid not null references classes,
+  on_date        date not null,
+  submitted_by   uuid not null references staff,
+  submitted_at   timestamptz not null default now(),
+  locked_at      timestamptz,
+  device_id      text,
+  unique (class_id, on_date)
+);
+
+create table student_attendance (
+  id             uuid primary key default gen_random_uuid(),
+  student_id     uuid not null references students on delete cascade,
+  class_id       uuid not null references classes,
+  on_date        date not null,
+  status         attendance_status not null,
+  reason         text,
+  marked_by      uuid not null references staff,
+  marked_at      timestamptz not null default now(),
+  unique (student_id, on_date)
+);
+create index student_attendance_class_date on student_attendance (class_id, on_date);
+create index student_attendance_student_date on student_attendance (student_id, on_date desc);
+
+create table early_leaves (
+  id            uuid primary key default gen_random_uuid(),
+  student_id    uuid not null references students on delete cascade,
+  on_date       date not null,
+  left_at       time not null,
+  reason        text,
+  collected_by  text,
+  recorded_by   uuid not null references staff,
+  created_at    timestamptz not null default now()
+);
+
+create type staff_attendance_status as enum ('present','late','on_leave','absent');
+
+create table staff_attendance (
+  id            uuid primary key default gen_random_uuid(),
+  staff_id      uuid not null references staff on delete cascade,
+  on_date       date not null,
+  checked_in_at timestamptz,
+  status        staff_attendance_status not null,
+  unique (staff_id, on_date)
+);
+```
+
+### 4.6 Leave
+
+```sql
+create table leave_types (
+  id                  uuid primary key default gen_random_uuid(),
+  key                 text not null unique,     -- 'casual','medical','duty','half_day'
+  name                text not null,
+  annual_entitlement  numeric(4,1) not null,
+  requires_document   boolean not null default false
+);
+
+create table leave_balances (
+  id                uuid primary key default gen_random_uuid(),
+  staff_id          uuid not null references staff on delete cascade,
+  leave_type_id     uuid not null references leave_types,
+  academic_year_id  uuid not null references academic_years,
+  entitled          numeric(4,1) not null,
+  used              numeric(4,1) not null default 0,
+  unique (staff_id, leave_type_id, academic_year_id)
+);
+
+create type leave_status as enum ('pending','approved','rejected','withdrawn');
+
+create table leave_requests (
+  id             uuid primary key default gen_random_uuid(),
+  staff_id       uuid not null references staff on delete cascade,
+  leave_type_id  uuid not null references leave_types,
+  starts_on      date not null,
+  ends_on        date not null,
+  half_day       boolean not null default false,
+  day_count      numeric(4,1) not null,
+  reason         text not null,
+  document_path  text,
+  status         leave_status not null default 'pending',
+  decided_by     uuid references staff,
+  decided_at     timestamptz,
+  remarks        text,
+  cover_assignment_id uuid references cover_assignments,
+  created_at     timestamptz not null default now(),
+  check (ends_on >= starts_on)
+);
+```
+
+### 4.7 Marks
+
+```sql
+create type mark_sheet_status as enum ('draft','submitted','reopened');
+
+create table mark_sheets (
+  id           uuid primary key default gen_random_uuid(),
+  class_id     uuid not null references classes,
+  subject_id   uuid not null references subjects,
+  term_id      uuid not null references terms,
+  max_score    numeric(5,2) not null default 100,
+  status       mark_sheet_status not null default 'draft',
+  submitted_by uuid references staff,
+  submitted_at timestamptz,
+  reopened_by  uuid references staff,
+  unique (class_id, subject_id, term_id)
+);
+
+create table marks (
+  id             uuid primary key default gen_random_uuid(),
+  mark_sheet_id  uuid not null references mark_sheets on delete cascade,
+  student_id     uuid not null references students on delete cascade,
+  score          numeric(5,2),
+  entered_by     uuid not null references staff,
+  entered_at     timestamptz not null default now(),
+  unique (mark_sheet_id, student_id)
+);
+```
+
+### 4.8 Student record extras
+
+```sql
+create table achievements (
+  id           uuid primary key default gen_random_uuid(),
+  student_id   uuid not null references students on delete cascade,
+  title        text not null,
+  category     text,          -- 'sports','arts','academic'
+  level        text,          -- 'class','school','zonal','national'
+  achieved_on  date not null,
+  recorded_by  uuid not null references staff
+);
+
+create table memberships (
+  id           uuid primary key default gen_random_uuid(),
+  student_id   uuid not null references students on delete cascade,
+  group_name   text not null,
+  position     text,
+  started_on   date,
+  ended_on     date
+);
+
+create type benefit_status as enum ('pending','issued','active','ended');
+
+create table benefits (
+  id            uuid primary key default gen_random_uuid(),
+  student_id    uuid not null references students on delete cascade,
+  scheme        text not null,       -- 'free_textbooks','uniform_voucher','midday_meal'
+  academic_year_id uuid references academic_years,
+  status        benefit_status not null default 'pending',
+  issued_on     date,
+  issued_by     uuid references staff,
+  notes         text
+);
+```
+
+### 4.9 Staff extras, communications, assets
+
+```sql
+create table responsibilities (
+  id                uuid primary key default gen_random_uuid(),
+  staff_id          uuid not null references staff on delete cascade,
+  title             text not null,       -- 'Library duty'
+  position          text,                -- 'secretary'
+  schedule_note     text,                -- 'Mondays 10:30'
+  academic_year_id  uuid not null references academic_years,
+  assigned_by       uuid references staff
+);
+
+create type audience_type as enum ('all_staff','section','class','individuals');
+
+create table announcements (
+  id            uuid primary key default gen_random_uuid(),
+  title         text not null,
+  body          text not null,
+  priority      smallint not null default 0,
+  audience      audience_type not null,
+  audience_ids  uuid[],
+  attachment_path text,
+  publish_at    timestamptz not null default now(),
+  author_id     uuid not null references staff,
+  created_at    timestamptz not null default now()
+);
+
+create table announcement_reads (
+  announcement_id uuid references announcements on delete cascade,
+  staff_id        uuid references staff on delete cascade,
+  read_at         timestamptz not null default now(),
+  primary key (announcement_id, staff_id)
+);
+
+create table inventory_items (
+  id            uuid primary key default gen_random_uuid(),
+  name          text not null,
+  category      text not null,
+  location      text,
+  condition     text,
+  min_quantity  integer not null default 0,
+  code          text unique,
+  status        text not null default 'active'
+);
+
+create type inv_txn_type as enum ('receipt','issue','return','write_off','adjustment');
+
+create table inventory_transactions (
+  id            uuid primary key default gen_random_uuid(),
+  item_id       uuid not null references inventory_items on delete cascade,
+  txn_type      inv_txn_type not null,
+  quantity      integer not null,      -- signed: receipts positive, issues negative
+  note          text,
+  actor_id      uuid not null references staff,
+  created_at    timestamptz not null default now()
+);
+-- Current quantity is always sum(quantity). Never store it as a column.
+
+create table events (
+  id                uuid primary key default gen_random_uuid(),
+  title             text not null,
+  description       text,
+  category          text,
+  starts_on         date not null,
+  ends_on           date,
+  location          text,
+  responsible_id    uuid references staff,
+  reminder_days     smallint[] not null default '{7,1}',
+  academic_year_id  uuid references academic_years,
+  created_by        uuid not null references staff
+);
+
+create table diary_entries (
+  id            uuid primary key default gen_random_uuid(),
+  on_date       date not null,
+  title         text not null,
+  body          text,
+  photo_paths   text[],
+  event_id      uuid references events,
+  author_id     uuid not null references staff,
+  created_at    timestamptz not null default now()
+);
+
+create table call_logs (
+  id            uuid primary key default gen_random_uuid(),
+  student_id    uuid references students on delete cascade,
+  guardian_id   uuid references guardians,
+  staff_id      uuid references staff,
+  caller_id     uuid not null references staff,
+  purpose       text,
+  called_at     timestamptz not null default now()
+);
+```
+
+### 4.10 System
+
+```sql
+create table devices (
+  id            uuid primary key default gen_random_uuid(),
+  staff_id      uuid not null references staff on delete cascade,
+  push_token    text not null unique,
+  platform      text not null,
+  last_seen_at  timestamptz not null default now()
+);
+
+create table notifications (
+  id            uuid primary key default gen_random_uuid(),
+  staff_id      uuid not null references staff on delete cascade,
+  type          text not null,
+  title         text not null,
+  body          text,
+  payload       jsonb,
+  sent_at       timestamptz,
+  read_at       timestamptz,
+  created_at    timestamptz not null default now()
+);
+
+create table audit_log (
+  id           bigserial primary key,
+  actor_id     uuid references staff,
+  action       text not null,          -- 'insert','update','delete','approve','reopen'
+  entity       text not null,
+  entity_id    uuid,
+  before       jsonb,
+  after        jsonb,
+  reason       text,
+  created_at   timestamptz not null default now()
+);
+create index audit_log_entity on audit_log (entity, entity_id, created_at desc);
+
+create table attendance_summaries (
+  id            uuid primary key default gen_random_uuid(),
+  scope_type    text not null,        -- 'student','class','grade','school'
+  scope_id      uuid,
+  term_id       uuid references terms,
+  school_days   integer not null,
+  present_days  integer not null,
+  pct           numeric(5,2) not null,
+  computed_at   timestamptz not null default now(),
+  unique (scope_type, scope_id, term_id)
+);
+```
+
+---
+
+## 5. Permission model
+
+### 5.1 Permission keys
+
+Seed exactly these. Adding a permission later is a migration plus a seed row, not a code change.
+
+```
+attendance.mark            attendance.view_board       attendance.remind
+attendance.amend_locked    attendance.early_leave
+student.view_basic         student.view_full           student.view_benefits
+student.edit               student.view_guardian_contact
+marks.enter                marks.review                marks.reopen
+staff.view_directory       staff.view_full             staff.manage
+staff.assign_responsibility
+leave.request              leave.approve               leave.view_balances
+cover.assign
+announcement.publish_all   announcement.publish_section
+inventory.view             inventory.manage
+event.manage               diary.manage
+calendar.manage            analytics.view              report.export
+account.manage             audit.view
+```
+
+### 5.2 Role seed
+
+| Role | Permissions | Default scope |
+|---|---|---|
+| `principal` | all keys | `school` |
+| `vice_principal` | all except `leave.approve`, `audit.view` | `school` |
+| `sectional_head` | `attendance.*` except `amend_locked`; `student.view_full`, `student.view_guardian_contact`; `marks.review`; `staff.view_directory`, `staff.view_full`, `staff.assign_responsibility`, `leave.view_balances`; `cover.assign`; `announcement.publish_section`; `analytics.view`; `leave.request` | `grade` |
+| `class_teacher` | `attendance.mark`, `attendance.view_board`, `attendance.early_leave`; `student.view_full`, `student.view_guardian_contact`, `student.view_benefits`; `marks.enter`; `staff.view_directory`; `leave.request` | `class` |
+| `administrator` | `student.view_full`, `student.edit`, `student.view_benefits`, `student.view_guardian_contact`; `staff.manage`, `staff.view_full`; `inventory.manage`, `inventory.view`; `event.manage`, `diary.manage`; `account.manage`; `attendance.amend_locked`; `leave.request` | `school` |
+| `staff` | `staff.view_directory`, `leave.request` | `self` |
+
+### 5.3 Scope resolution
+
+A user may act on a record if **any** of their unrevoked `staff_roles` rows grants the permission at a scope containing the record.
+
+```sql
+create or replace function has_permission(
+  p_staff_id uuid,
+  p_permission text,
+  p_class_id uuid default null
+) returns boolean language sql stable as $$
+  select exists (
+    select 1
+    from staff_roles sr
+    join role_permissions rp on rp.role_id = sr.role_id
+    left join classes c on c.id = p_class_id
+    where sr.staff_id = p_staff_id
+      and sr.revoked_at is null
+      and rp.permission_key = p_permission
+      and (
+            sr.scope_type = 'school'
+        or (sr.scope_type = 'grade' and c.grade_id = sr.scope_id)
+        or (sr.scope_type = 'class' and c.id       = sr.scope_id)
+      )
+  )
+  or exists (
+    -- an active cover assignment grants class-teacher rights over that class
+    select 1 from cover_assignments ca
+    join roles r on r.key = 'class_teacher'
+    join role_permissions rp2 on rp2.role_id = r.id
+    where ca.staff_id = p_staff_id
+      and ca.class_id = p_class_id
+      and current_date between ca.starts_on and ca.ends_on
+      and rp2.permission_key = p_permission
+  );
+$$;
+```
+
+Every RLS policy calls this function. Example:
+
+```sql
+alter table student_attendance enable row level security;
+
+create policy read_attendance on student_attendance for select
+  using (has_permission(current_staff_id(), 'attendance.view_board', class_id)
+      or has_permission(current_staff_id(), 'attendance.mark', class_id));
+
+create policy write_attendance on student_attendance for insert
+  with check (has_permission(current_staff_id(), 'attendance.mark', class_id)
+              and is_school_day(on_date)
+              and attendance_is_editable(class_id, on_date));
+```
+
+`current_staff_id()` resolves `auth.uid()` to `staff.id`.
+
+### 5.4 Column-level restriction
+
+Two cases need column control rather than row control:
+
+- **Guardian contact numbers** — exposed only through a view `student_guardians_contact` protected by `student.view_guardian_contact`. Plain student queries never join `guardians.phone_*`.
+- **Benefits** — a separate table with its own policy requiring `student.view_benefits`. A user without it simply sees no rows, and the client hides the tab when the query returns empty and the permission is absent.
+
+---
+
+## 6. Derived logic
+
+All of the following are Postgres functions. Never reimplement them client-side.
+
+### 6.1 Is a date a school day
+
+```sql
+create or replace function is_school_day(p_date date) returns boolean
+language sql stable as $$
+  select
+    case
+      when (select day_type from calendar_days where on_date = p_date)
+           in ('holiday','closure') then false
+      when (select day_type from calendar_days where on_date = p_date) is not null
+           then true                                   -- half_day and exam count
+      when not exists (select 1 from terms
+                       where p_date between starts_on and ends_on) then false
+      when extract(isodow from p_date)::smallint
+           <> all ((select working_weekdays from school_settings)) then false
+      else true
+    end;
+$$;
+```
+
+### 6.2 Attendance editability
+
+```sql
+create or replace function attendance_is_editable(p_class uuid, p_date date)
+returns boolean language sql stable as $$
+  select coalesce(
+    (select now() < s.submitted_at
+       + make_interval(mins => (select attendance_edit_minutes from school_settings))
+     from attendance_submissions s
+     where s.class_id = p_class and s.on_date = p_date),
+    true)  -- not yet submitted, therefore editable
+$$;
+```
+
+After the window, writes require `attendance.amend_locked` and a non-null `reason`, and always produce an `audit_log` row.
+
+### 6.3 Consecutive absences
+
+```sql
+create or replace function consecutive_absences(p_student uuid, p_as_of date)
+returns integer language sql stable as $$
+  with days as (
+    select on_date, status
+    from student_attendance
+    where student_id = p_student and on_date <= p_as_of
+    order by on_date desc
+    limit 30
+  ), run as (
+    select status, row_number() over (order by on_date desc) rn
+    from days
+  )
+  select coalesce(min(rn) - 1, (select count(*) from run))::int
+  from run where status <> 'absent';
+$$;
+```
+
+### 6.4 Class marking status for a date
+
+Returns one row per class in scope: `class_id, class_name, grade, teacher, submitted (bool), absent_count`. Used by the attendance board and the principal home screen. Implement as a view `v_class_marking_status(on_date)`.
+
+---
+
+## 7. Scheduled jobs
+
+Run via `pg_cron` or Supabase scheduled Edge Functions. **Every one begins by checking `is_school_day(current_date)` and exits immediately if false.**
+
+| Job | Schedule | Behaviour |
+|---|---|---|
+| `remind_unmarked_classes` | At `attendance_due_at` | For each class with no `attendance_submissions` row today, push to the class teacher (or active cover teacher). Write one `notifications` row per recipient. |
+| `escalate_unmarked_classes` | 30 min after deadline | Push a digest of still-unmarked classes to principal and the relevant sectional heads. |
+| `lock_attendance` | Hourly | Set `locked_at` on submissions whose edit window has passed. |
+| `detect_absence_risk` | Daily, 30 min after deadline | For each active student, if `consecutive_absences >= risk_consecutive_days` or term percentage `< risk_attendance_pct`, notify class teacher, sectional head and principal. Do not re-notify for the same student more than once every 3 days. |
+| `mark_staff_absent` | At `day_ends_at` | Any staff member with no `staff_attendance` row and no approved leave for today gets a row with status `absent`. |
+| `event_reminders` | Daily, 06:00 | For each event, for each value in `reminder_days`, notify the audience if today matches. |
+| `publish_scheduled_announcements` | Every 5 min | Publish announcements whose `publish_at` has passed and which have not yet been sent. |
+| `recompute_summaries` | Nightly, 01:00 | Rebuild `attendance_summaries` for student, class, grade and school for the current term. |
+| `low_stock_check` | Daily, 07:00 | Notify administrator and principal of items at or below `min_quantity`. |
+
+---
+
+## 8. API surface
+
+Prefer PostgREST (Supabase auto-generated) for straightforward reads and writes, protected by RLS. Use Edge Functions only where a transaction spans several tables or requires privileged work.
+
+### Edge Functions required
+
+| Function | Purpose |
+|---|---|
+| `POST /submit-attendance` | Accepts `{ class_id, on_date, entries[], device_id, client_submission_id }`. Idempotent on `client_submission_id`. Writes `attendance_submissions` + `student_attendance` in one transaction, returns absentee summary with consecutive-day counts. |
+| `POST /approve-leave` | Validates balance, checks overlap, requires cover for class teachers, writes decision + `cover_assignments` + `leave_balances` update + notification, all in one transaction. |
+| `POST /assign-cover` | Creates a cover assignment and notifies both teachers. |
+| `POST /publish-announcement` | Resolves the audience into recipients, writes reads-pending rows, dispatches push. |
+| `POST /declare-closure` | Writes a `calendar_days` row of type `closure`, cancels today's pending reminders, notifies all staff. |
+| `POST /import-records` | One-time spreadsheet import. Accepts CSV, validates, returns a reconciliation report of accepted and rejected rows. Never partially commits. |
+| `POST /log-call` | Writes a `call_logs` row after a call placed from the app. |
+| `GET /export-report` | Generates a spreadsheet for a chosen report and returns a signed URL. |
+
+### Response conventions
+
+- Errors return `{ error: { code, message, field? } }` with a stable `code`. `message` is user-presentable and plain.
+- Never return a raw Postgres error to the client.
+
+---
+
+## 9. Offline sync contract
+
+Only three operations are offline-capable: **mark attendance**, **record early leave**, **enter marks**. Everything else requires connectivity and says so plainly.
+
+### Local schema (SQLite)
+
+```sql
+create table pending_operations (
+  id                   text primary key,   -- uuid generated on device
+  operation            text not null,      -- 'submit_attendance' | 'early_leave' | 'save_marks'
+  payload              text not null,      -- JSON
+  created_at           integer not null,
+  attempts             integer not null default 0,
+  last_error           text,
+  status               text not null default 'pending'  -- pending|syncing|done|failed
+);
+```
+
+### Rules
+
+1. Every operation carries a device-generated UUID as `client_submission_id`. The server treats a repeat of the same id as a no-op and returns the original result. **Idempotency is mandatory, not best-effort.**
+2. The queue drains oldest-first, one operation at a time, on app foreground, on network regain, and every 60 seconds while online.
+3. Failed operations retry with exponential backoff up to 24 hours, then surface to the user as a banner with a manual retry.
+4. The roster for a teacher's own class is cached locally and refreshed on each successful sync, so the marking screen opens offline.
+5. The UI shows sync state at all times: a synced tick, a pending badge with count, or an error banner. **The user must never wonder whether their marking was saved.**
+6. Conflicts: server state wins. If a submission arrives after the class was already submitted by someone else, return `409` with the existing submission and let the user view it rather than silently discarding their work.
+
+---
+
+## 10. Screen specifications
+
+Screens are listed with their route name, the data they read, the permission that gates them, and the actions they offer. Build them in the order given by section 12, not in this order.
+
+| Route | Gate | Reads | Actions |
+|---|---|---|---|
+| `SignIn` | — | — | Sign in, forgot password, biometric unlock |
+| `SetPassword` | authenticated, first login | — | Set password |
+| `Home` | authenticated | role-dependent, see below | role-dependent |
+| `StudentSearch` | `student.view_basic` | students in scope, recent views, at-risk count | Search, browse by class, open risk list |
+| `ClassList` | `attendance.view_board` | classes in scope with marking status | Open class |
+| `ClassDetail` | `student.view_full` (class) | roster, attendance %, class teacher | Open student, mark attendance |
+| `StudentProfile` | `student.view_basic` | student, enrolment, guardians, risk flag, timeline | Call guardian, log call, add note |
+| `StudentAttendanceTab` | `student.view_full` | monthly calendar of school days, term %, absence records | Add reason to absence |
+| `StudentMarksTab` | `student.view_full` | marks with class averages, term trend, entered-by | — |
+| `StudentActivityTab` | `student.view_full` | achievements, memberships, class responsibility | Add achievement, add membership |
+| `StudentBenefitsTab` | `student.view_benefits` | current and past benefits with status | Mark collected |
+| `MarkAttendance` | `attendance.mark` (class) | cached roster, previous-day absentees | Toggle status, submit |
+| `AttendanceSubmitted` | `attendance.mark` | absentee list with consecutive counts and guardians | Call, log call, record early leave |
+| `EarlyLeave` | `attendance.early_leave` | roster | Record departure |
+| `AttendanceBoard` | `attendance.view_board` | `v_class_marking_status`, staff board | Open class, remind unmarked, switch student/staff tab |
+| `MarkEntry` | `marks.enter` | mark sheet, roster | Save draft, submit and lock |
+| `MarksReview` | `marks.review` | class and subject comparison, outstanding sheets | Open sheet, reopen (principal) |
+| `StaffDirectory` | `staff.view_directory` | staff with presence, duty roster summary | Call, filter, open profile |
+| `StaffProfile` | `staff.view_directory` | profile; attendance, responsibilities and leave gated by `staff.view_full` | Call, assign responsibility, change role, deactivate |
+| `MyLeave` | `leave.request` | balances, own history | Request leave, withdraw |
+| `LeaveRequests` | `leave.approve` | pending requests with impact summary | Reject inline, open detail |
+| `LeaveRequestDetail` | `leave.approve` | request, balance, conflicts, coverage gap | Assign cover, approve, reject |
+| `Announcements` | authenticated | feed filtered by audience | Open, mark read |
+| `ComposeAnnouncement` | `announcement.publish_*` | audience options within scope | Publish, schedule |
+| `Inventory` | `inventory.view` | items, low-stock first | Search, filter, scan, issue, add |
+| `InventoryItem` | `inventory.view` | item, transaction history | Record movement |
+| `EventCalendar` | authenticated | events by month | Open event, add |
+| `EventDetail` | authenticated; edit needs `event.manage` | event, reminders | Edit, add to diary |
+| `Diary` | authenticated | entries by year | Open, add |
+| `AcademicCalendar` | `calendar.manage` | year, terms, working days, rules, counts | Edit terms, edit day, set rules |
+| `CalendarDayEditor` | `calendar.manage` | selected day | Set day type, label, save |
+| `Analytics` | `analytics.view` | summaries in scope | Change period, drill down |
+| `UserAccounts` | `account.manage` | staff accounts and role assignments | Create, assign role with scope, deactivate |
+| `AuditLog` | `audit.view` | audit entries | Filter by actor, entity, date |
+| `Settings` | authenticated | own profile, notification preferences, language | Edit, sign out |
+| `More` | authenticated | permission-filtered menu with badges | Navigate |
+
+### Home screen composition
+
+`Home` is one screen whose blocks are selected by permission, not four separate screens.
+
+| Block | Shown when | Content |
+|---|---|---|
+| My class attendance card | user is class teacher or active cover for a class, and today is a school day | Marking prompt if unsubmitted; collapsed confirmation if submitted |
+| Section status | user holds `attendance.remind` at grade scope | Class chips with marking state, remind button for that section |
+| School pulse | user holds `attendance.view_board` at school scope | Unmarked class alert with remind action, then attendance %, staff present, absent count, pending approvals |
+| Needs attention | always | Permission-filtered list: leave requests, at-risk students, uncovered classes, low stock, outstanding mark sheets |
+| Today | always | Own duties, today's events |
+| Quick actions | by permission | Announce, find student, declare closure |
+
+**Ordering rule:** blocks the user must act on come before blocks the user merely reads. The user's own outstanding task always comes first.
+
+---
+
+## 11. Acceptance criteria
+
+Written as executable expectations. Each maps to the SRS requirement in brackets.
+
+### Attendance
+
+- **Given** a class teacher on a school day with attendance unsubmitted, **when** they open the app, **then** the home screen shows a marking prompt as the first block. [FR-ATT-01, NFR-USE-03]
+- **Given** the marking screen has loaded, **then** every student is shown as present before any input. [FR-ATT-01]
+- **Given** the device has no network, **when** the teacher submits, **then** the submission is queued locally, the UI confirms it, and a pending indicator is visible. [FR-ATT-04, NFR-REL-01]
+- **Given** a queued submission and the network returns, **when** sync runs, **then** the record reaches the server exactly once even if sync is triggered repeatedly. [NFR-REL-04]
+- **Given** attendance was submitted 20 minutes ago and the window is 60 minutes, **when** the teacher edits it, **then** the edit succeeds. **Given** 90 minutes have passed, **then** the edit is rejected with a message naming who can amend it. [FR-ATT-05, FR-ATT-06]
+- **Given** today is a holiday in `calendar_days`, **when** the reminder job runs, **then** it sends nothing and creates no notification rows. [FR-ATT-13, FR-NOT-05]
+- **Given** a student has been absent for 3 consecutive school days, **when** the risk job runs, **then** the class teacher, sectional head and principal each receive one notification and the student appears in the at-risk list. [FR-NOT-02, FR-ANL-02]
+- **Given** the principal opens the board, **then** unmarked classes appear before marked ones. [FR-ATT-10]
+
+### Permissions
+
+- **Given** a class teacher of 4B, **when** they request attendance rows for 4C, **then** the query returns zero rows regardless of what the client requests. [NFR-SEC-03, NFR-SEC-04]
+- **Given** a teacher with an active cover assignment for 4D, **when** they open the marking screen for 4D, **then** they can mark it; **and** on the day after the assignment ends, they cannot. [FR-COV-02]
+- **Given** a sectional head for grade 4, **when** they view student profiles, **then** grade 4 students show fully and other students show name, class and photo only. [FR-STU-10]
+- **Given** a user without `student.view_benefits`, **then** the benefits tab is not rendered and the underlying query returns no rows. [FR-ACH-05]
+
+### Leave
+
+- **Given** a pending request from a class teacher, **when** the principal attempts to approve from the list, **then** approval is not offered; only rejection and review are. [FR-LVE-05]
+- **Given** approval of a class teacher's leave with no cover nominated, **then** the request cannot be approved until a cover teacher is chosen or the principal explicitly acknowledges none is needed. [FR-LVE-06]
+- **Given** approval succeeds, **then** the balance decreases, the staff member shows as on leave for those dates, an audit row exists, and the requester is notified. [FR-LVE-07, FR-LVE-08, FR-LVE-10]
+
+### Calendar
+
+- **Given** a date inside a term, on a working weekday, with no override, **then** `is_school_day` returns true. [FR-CAL-04]
+- **Given** the principal declares a closure for today, **then** pending reminders for today are cancelled, the day is excluded from attendance denominators, and all staff are notified. [FR-CAL-06]
+- **Given** a past school day is changed to a holiday, **then** the user is warned that percentages will be recalculated, and after saving the affected summaries are rebuilt. [FR-CAL-07]
+
+### Marks
+
+- **Given** a submitted mark sheet, **when** the teacher attempts to edit it, **then** the edit is rejected and the message states that only the principal may reopen it. [FR-MRK-03]
+- **Given** a student's marks view, **then** each subject shows the class average for the same subject and term beside the student's score. [FR-MRK-05]
+
+---
+
+## 12. Build order
+
+Each task must pass its test before the next begins.
+
+| # | Task | Passes when |
+|---|---|---|
+| 1 | Repo, Expo app, Supabase project, CI, migration pipeline | A trivial migration deploys and the app boots on a device |
+| 2 | Tables from section 4.1–4.4; seed roles, permissions, role_permissions, leave types, subjects | Seed data loads; `has_permission` returns correct results for hand-written cases |
+| 3 | Auth: sign in, first-password set, reset by OTP, session handling | A seeded principal and a seeded class teacher can each sign in |
+| 4 | RLS policies for all existing tables, with pgTAP tests | A class teacher cannot read another class's rows in any query |
+| 5 | Spreadsheet import for students, guardians, staff, classes | Reconciliation report lists accepted and rejected rows; no partial commit |
+| 6 | Academic calendar: years, terms, working days, day overrides, `is_school_day` | Function returns correct results across term boundaries, weekends and overrides |
+| 7 | Student and staff directories, search, profile shell | Search finds a student by partial admission number within scope |
+| 8 | **Offline engine**: SQLite queue, sync loop, idempotency, sync indicators | A queued operation survives app restart and syncs exactly once |
+| 9 | Mark attendance, submit, edit window, confirmation with absentees | A full class can be marked and submitted in under 30 seconds in airplane mode |
+| 10 | Attendance board, class drill-down, remind unmarked | Principal sees unmarked classes first and can remind them |
+| 11 | Scheduled jobs: reminder, escalation, lock, risk detection | On a seeded holiday, no job produces output |
+| 12 | Early leave, staff check-in, staff attendance board | Three-state staff board renders with cover status |
+| 13 | Leave: request, balances, approval with impact, cover assignment | Approval without cover for a class teacher is blocked |
+| 14 | Marks: sheets, entry, lock, reopen, class averages, trends | Locked sheet resists edits from its own author |
+| 15 | Achievements, memberships, benefits, student timeline | Benefits tab absent for a user lacking the permission |
+| 16 | Announcements: compose, audience resolution, push, read receipts | A section announcement reaches only that section |
+| 17 | Responsibilities and duty roster | Same data reachable from person and from duty |
+| 18 | Inventory: items, transactions, derived quantity, low stock | Quantity always equals the transaction sum |
+| 19 | Events, reminders, school diary | Event reminder fires at the configured lead time |
+| 20 | Analytics, summaries job, exports | Dashboard renders in under two seconds from summaries |
+| 21 | User accounts, role assignment with scope, audit log viewer | A new sectional head sees exactly one grade |
+| 22 | Settings, notification preferences, i18n extraction | No user-facing string remains hard-coded |
+| 23 | Hardening: rate limiting, backup restore test, accessibility pass | Restore from backup succeeds; contrast and tap targets verified |
+
+---
+
+## 13. Seed data required for development
+
+- One academic year with three terms matching the school's real dates.
+- Five grades, thirty classes, roughly thirty students per class with realistic Sinhala and Tamil names.
+- Thirty-five staff with the full range of roles, including one person holding both `sectional_head` (grade) and `class_teacher` (class).
+- One class teacher on approved leave with a cover assignment, and one without — the uncovered case must be visible in development.
+- One student with three consecutive absences, so the risk path is exercised.
+- A holiday, a half day and an exam day inside the current term.
+
+---
+
+## 14. Definition of done
+
+A task is complete when all of the following hold.
+
+- The behaviour matches its acceptance criteria in section 11.
+- Server-side enforcement exists for every rule; removing the client would not weaken it.
+- RLS policies exist for every new table and are covered by a pgTAP test.
+- Every write path produces an `audit_log` row where the SRS requires one.
+- No user-facing string is hard-coded outside `/i18n`.
+- Any offline-capable operation is idempotent and has a test proving repeated submission creates one record.
+- Every new configurable value lives in `school_settings` or a reference table, not in code.
+- The screen works at 360 dp width, with 44 dp tap targets and 4.5:1 text contrast.
+
+---
+
+## 15. Open decisions and interim defaults
+
+Where a decision is unresolved, build the default and make it configurable.
+
+| # | Question | Default to build |
+|---|---|---|
+| 1 | How staff attendance is captured | Self check-in in the app. Keep the write path generic so a geofence or register can supply it later. |
+| 2 | Who approves leave | Principal approves all. Store `approver_role` on `leave_types` so section-level approval can be enabled later. |
+| 3 | Sectional head sight of leave balances | Granted for own section (`leave.view_balances` at grade scope). |
+| 4 | Who edits the academic calendar | Principal only. `calendar.manage` is not granted to `administrator`. |
+| 5 | What a class teacher sees of other classes' students | Name, class, photo only. |
+| 6 | Absence-risk thresholds | 3 consecutive days, or below 80% for the term. Both in `school_settings`. |
+| 7 | Whether parents will see marks | Not decided; phase 2. Do not expose marks through any public view in phase 1. |
+| 8 | Second language at launch | Build i18n infrastructure, ship English only. |
+| 9 | Distribution | Internal distribution to staff devices; do not assume public store review timelines. |
+
+---
+
+## 16. Explicitly out of scope
+
+Do not build, and do not leave scaffolding for: the parent application, fee collection, timetabling, examination paper management, certificate generation, library circulation, transport, biometric hardware integration, external authority reporting, or a web console.
