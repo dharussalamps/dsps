@@ -60,6 +60,100 @@ as $$
 $$;
 grant execute on function staff_matches_audience(uuid, audience_type, uuid[]) to authenticated;
 
+-- FR-ANN-02 bug fix: create_announcement previously only checked
+-- has_permission(caller, 'publish_all'|'publish_section') with no class_id,
+-- which (a) could never succeed for a grade-scoped sectional_head, since
+-- has_permission()'s 'grade' branch needs a class to resolve a grade from,
+-- and (b) never validated that the *targeted* audience_ids actually fall
+-- inside whatever scope the caller does hold — so the one role case that
+-- did pass (a school-scoped grant) could target any section/class/
+-- individual with no restriction at all. This resolves both: a
+-- grade-scoped 'announcement.publish_section' grant may target only
+-- sections/classes/individuals inside that same grade; a school-scoped
+-- grant (principal, vice_principal, and now administrator for
+-- 'publish_all' specifically — see seed 003_role_permissions.sql) may
+-- target anything the base permission already allows.
+create or replace function can_publish_to_audience(
+  p_staff_id uuid, p_audience audience_type, p_audience_ids uuid[]
+) returns boolean
+language plpgsql
+stable
+as $$
+declare
+  v_permission text := case p_audience when 'all_staff' then 'announcement.publish_all' else 'announcement.publish_section' end;
+begin
+  if not has_permission(p_staff_id, v_permission) then
+    return false;
+  end if;
+
+  if exists (
+    select 1 from staff_roles sr
+    join role_permissions rp on rp.role_id = sr.role_id
+    where sr.staff_id = p_staff_id and sr.revoked_at is null
+      and rp.permission_key = v_permission and sr.scope_type in ('school', 'self')
+  ) then
+    return true; -- school-scoped grant: the base permission check is enough
+  end if;
+
+  if p_audience = 'all_staff' then
+    return false; -- only a school-scoped publish_all grant may address everyone
+  end if;
+
+  if p_audience = 'section' then
+    return p_audience_ids <@ coalesce((
+      select array_agg(sr.scope_id)
+      from staff_roles sr
+      join role_permissions rp on rp.role_id = sr.role_id
+      where sr.staff_id = p_staff_id and sr.revoked_at is null
+        and rp.permission_key = 'announcement.publish_section' and sr.scope_type = 'grade'
+    ), '{}'::uuid[]);
+  end if;
+
+  if p_audience = 'class' then
+    return not exists (
+      select 1 from classes c
+      where c.id = any(p_audience_ids)
+        and c.grade_id <> all (coalesce((
+          select array_agg(sr.scope_id)
+          from staff_roles sr
+          join role_permissions rp on rp.role_id = sr.role_id
+          where sr.staff_id = p_staff_id and sr.revoked_at is null
+            and rp.permission_key = 'announcement.publish_section' and sr.scope_type = 'grade'
+        ), '{}'::uuid[]))
+    );
+  end if;
+
+  if p_audience = 'individuals' then
+    return not exists (
+      select 1 from unnest(p_audience_ids) as target
+      where not exists (
+        select 1
+        from staff_roles caller_sr
+        join role_permissions rp on rp.role_id = caller_sr.role_id
+        where caller_sr.staff_id = p_staff_id and caller_sr.revoked_at is null
+          and rp.permission_key = 'announcement.publish_section' and caller_sr.scope_type = 'grade'
+          and (
+            exists (
+              select 1 from staff_roles target_sr
+              join classes c on c.id = target_sr.scope_id
+              where target_sr.staff_id = target and target_sr.revoked_at is null
+                and target_sr.scope_type = 'class' and c.grade_id = caller_sr.scope_id
+            )
+            or exists (
+              select 1 from staff_roles target_sr
+              where target_sr.staff_id = target and target_sr.revoked_at is null
+                and target_sr.scope_type = 'grade' and target_sr.scope_id = caller_sr.scope_id
+            )
+          )
+      )
+    );
+  end if;
+
+  return false;
+end;
+$$;
+grant execute on function can_publish_to_audience(uuid, audience_type, uuid[]) to authenticated;
+
 -- Visible once published (or always to its own author, so a scheduled
 -- draft doesn't just disappear from its composer's view) and only to
 -- staff the audience resolves to.
@@ -134,10 +228,8 @@ set search_path = public
 as $$
 declare
   v_id uuid;
-  v_permission text;
 begin
-  v_permission := case p_audience when 'all_staff' then 'announcement.publish_all' else 'announcement.publish_section' end;
-  if not has_permission(current_staff_id(), v_permission) then
+  if not can_publish_to_audience(current_staff_id(), p_audience, p_audience_ids) then
     raise exception 'forbidden' using errcode = '42501';
   end if;
 

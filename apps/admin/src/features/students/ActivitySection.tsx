@@ -17,8 +17,10 @@ export function ActivitySection({ studentId }: { studentId: string }) {
   const [mode, setMode] = useState<'none' | 'achievement' | 'membership'>('none');
   const [title, setTitle] = useState('');
   const [level, setLevel] = useState('');
+  const [category, setCategory] = useState('');
   const [groupName, setGroupName] = useState('');
   const [position, setPosition] = useState('');
+  const [endedOn, setEndedOn] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function invalidate() {
@@ -30,10 +32,18 @@ export function ActivitySection({ studentId }: { studentId: string }) {
     if (!staff || !title.trim()) return;
     setSaving(true);
     try {
-      await addAchievement({ studentId, title: title.trim(), level: level.trim(), achievedOn: new Date().toISOString().slice(0, 10), recordedBy: staff.id });
+      await addAchievement({
+        studentId,
+        title: title.trim(),
+        category: category.trim() || undefined,
+        level: level.trim(),
+        achievedOn: new Date().toISOString().slice(0, 10),
+        recordedBy: staff.id,
+      });
       setMode('none');
       setTitle('');
       setLevel('');
+      setCategory('');
       await invalidate();
     } finally {
       setSaving(false);
@@ -44,10 +54,17 @@ export function ActivitySection({ studentId }: { studentId: string }) {
     if (!groupName.trim()) return;
     setSaving(true);
     try {
-      await addMembership({ studentId, groupName: groupName.trim(), position: position.trim(), startedOn: new Date().toISOString().slice(0, 10) });
+      await addMembership({
+        studentId,
+        groupName: groupName.trim(),
+        position: position.trim(),
+        startedOn: new Date().toISOString().slice(0, 10),
+        endedOn: endedOn.trim() || undefined,
+      });
       setMode('none');
       setGroupName('');
       setPosition('');
+      setEndedOn('');
       await invalidate();
     } finally {
       setSaving(false);
@@ -85,7 +102,8 @@ export function ActivitySection({ studentId }: { studentId: string }) {
       {mode === 'achievement' ? (
         <View style={{ gap: spacing.sm }}>
           <TextField label="Title" value={title} onChangeText={setTitle} />
-          <TextField label="Level (e.g. school, zonal)" value={level} onChangeText={setLevel} />
+          <TextField label="Category (e.g. sports, arts, academic)" value={category} onChangeText={setCategory} />
+          <TextField label="Level (e.g. class, school, zonal, national)" value={level} onChangeText={setLevel} />
           <View style={{ flexDirection: 'row', gap: spacing.xs }}>
             <Button label="Save" size="sm" onPress={() => void submitAchievement()} loading={saving} />
             <Button label="Cancel" size="sm" variant="ghost" onPress={() => setMode('none')} />
@@ -95,8 +113,9 @@ export function ActivitySection({ studentId }: { studentId: string }) {
 
       {mode === 'membership' ? (
         <View style={{ gap: spacing.sm }}>
-          <TextField label="Group name" value={groupName} onChangeText={setGroupName} />
+          <TextField label="Group name (club, team, society or house)" value={groupName} onChangeText={setGroupName} />
           <TextField label="Position (optional)" value={position} onChangeText={setPosition} />
+          <TextField label="Ended on (optional, YYYY-MM-DD)" value={endedOn} onChangeText={setEndedOn} placeholder="leave blank if current" />
           <View style={{ flexDirection: 'row', gap: spacing.xs }}>
             <Button label="Save" size="sm" onPress={() => void submitMembership()} loading={saving} />
             <Button label="Cancel" size="sm" variant="ghost" onPress={() => setMode('none')} />
@@ -115,7 +134,11 @@ export function ActivitySection({ studentId }: { studentId: string }) {
       {memberships.data?.map((m) => (
         <View key={m.id} style={{ paddingVertical: spacing.xs }}>
           <Text style={{ ...typography.body, color: semantic.textPrimary }}>👥 {m.groupName}</Text>
-          {m.position ? <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{m.position}</Text> : null}
+          <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
+            {[m.position, m.startedOn ? `${m.startedOn.slice(0, 4)}–${m.endedOn ? m.endedOn.slice(0, 4) : 'present'}` : null]
+              .filter(Boolean)
+              .join(' · ')}
+          </Text>
         </View>
       ))}
     </Card>

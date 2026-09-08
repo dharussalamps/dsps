@@ -1,5 +1,8 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { AcademicStructureScreen } from '@/features/academicStructure/AcademicStructureScreen';
 import { ComposeAnnouncementScreen } from '@/features/announcements/ComposeAnnouncementScreen';
+import { NotificationsScreen } from '@/features/notifications/NotificationsScreen';
+import { AssignCoverScreen } from '@/features/leave/AssignCoverScreen';
 import { AttendanceSubmittedScreen } from '@/features/attendance/AttendanceSubmittedScreen';
 import { MarkAttendanceScreen } from '@/features/attendance/MarkAttendanceScreen';
 import { AuditLogScreen } from '@/features/accounts/AuditLogScreen';
@@ -77,11 +80,14 @@ export function AppNavigator() {
 
       <Stack.Screen name="AcademicCalendar" component={AcademicCalendarScreen} options={{ title: 'Academic calendar' }} />
       <Stack.Screen name="CalendarDayEditor" component={CalendarDayEditorScreen} options={{ title: 'Edit day' }} />
+      <Stack.Screen name="AcademicStructure" component={AcademicStructureScreen} options={{ title: 'Classes & subjects' }} />
 
       <Stack.Screen name="Analytics" component={AnalyticsScreen} options={{ title: 'Analytics' }} />
       <Stack.Screen name="UserAccounts" component={UserAccountsScreen} options={{ title: 'User accounts' }} />
       <Stack.Screen name="AuditLog" component={AuditLogScreen} options={{ title: 'Audit log' }} />
       <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
+      <Stack.Screen name="AssignCover" component={AssignCoverScreen} options={{ title: 'Assign cover teacher' }} />
     </Stack.Navigator>
   );
 }

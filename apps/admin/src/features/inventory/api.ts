@@ -6,13 +6,31 @@ export type InventoryItem = {
   name: string;
   category: string;
   location: string | null;
+  condition: string | null;
+  code: string | null;
   minQuantity: number;
   quantity: number;
   lowStock: boolean;
 };
 
+const ITEM_COLUMNS = 'id, name, category, location, condition, code, min_quantity';
+
+function toInventoryItem(item: { id: string; name: string; category: string; location: string | null; condition: string | null; code: string | null; min_quantity: number }, quantity: number): InventoryItem {
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    location: item.location,
+    condition: item.condition,
+    code: item.code,
+    minQuantity: item.min_quantity,
+    quantity,
+    lowStock: quantity <= item.min_quantity,
+  };
+}
+
 export async function listInventoryItems(query: string): Promise<InventoryItem[]> {
-  let request = supabase.from('inventory_items').select('id, name, category, location, min_quantity').eq('status', 'active');
+  let request = supabase.from('inventory_items').select(ITEM_COLUMNS).eq('status', 'active');
   const term = sanitizeFilterValue(query);
   if (term) request = request.or(`name.ilike.%${term}%,category.ilike.%${term}%,code.ilike.%${term}%`);
 
@@ -22,16 +40,7 @@ export async function listInventoryItems(query: string): Promise<InventoryItem[]
   const results = await Promise.all(
     (items ?? []).map(async (item) => {
       const { data: qty } = await supabase.rpc('inventory_quantity', { p_item_id: item.id });
-      const quantity = (qty as number) ?? 0;
-      return {
-        id: item.id,
-        name: item.name,
-        category: item.category,
-        location: item.location,
-        minQuantity: item.min_quantity,
-        quantity,
-        lowStock: quantity <= item.min_quantity,
-      };
+      return toInventoryItem(item, (qty as number) ?? 0);
     }),
   );
 
@@ -39,18 +48,24 @@ export async function listInventoryItems(query: string): Promise<InventoryItem[]
 }
 
 export async function getInventoryItem(itemId: string): Promise<InventoryItem | null> {
-  const { data, error } = await supabase.from('inventory_items').select('id, name, category, location, min_quantity').eq('id', itemId).maybeSingle();
+  const { data, error } = await supabase.from('inventory_items').select(ITEM_COLUMNS).eq('id', itemId).maybeSingle();
   if (error) throw error;
   if (!data) return null;
   const { data: qty } = await supabase.rpc('inventory_quantity', { p_item_id: itemId });
-  const quantity = (qty as number) ?? 0;
-  return { id: data.id, name: data.name, category: data.category, location: data.location, minQuantity: data.min_quantity, quantity, lowStock: quantity <= data.min_quantity };
+  return toInventoryItem(data, (qty as number) ?? 0);
 }
 
-export async function createInventoryItem(input: { name: string; category: string; location?: string; minQuantity: number }): Promise<string> {
+export async function createInventoryItem(input: { name: string; category: string; location?: string; condition?: string; code?: string; minQuantity: number }): Promise<string> {
   const { data, error } = await supabase
     .from('inventory_items')
-    .insert({ name: input.name, category: input.category, location: input.location || null, min_quantity: input.minQuantity })
+    .insert({
+      name: input.name,
+      category: input.category,
+      location: input.location || null,
+      condition: input.condition || null,
+      code: input.code || null,
+      min_quantity: input.minQuantity,
+    })
     .select('id')
     .single();
   if (error) throw error;

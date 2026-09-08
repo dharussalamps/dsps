@@ -1,25 +1,32 @@
 import { useRoute, type RouteProp } from '@react-navigation/native';
-import { ActivityIndicator, Linking, Text, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { ActivityIndicator, Alert, Text, View } from 'react-native';
 import { Button, Card, EmptyState, Screen, ScreenHeader, StatusPill } from '@/components';
-import { useStudentMarks } from '@/features/marks/hooks';
+import { useCurrentTerm, useStudentMarks, useStudentTermPosition, useStudentTermTrend } from '@/features/marks/hooks';
 import type { RootStackParamList } from '@/navigation/types';
+import { useAuthStore } from '@/store/authStore';
 import { semantic, spacing, typography } from '@/theme/tokens';
+import { setStudentStatus } from './api';
 import { ActivitySection } from './ActivitySection';
+import { AttendanceHistoryCalendar } from './AttendanceHistoryCalendar';
 import { BenefitsSection } from './BenefitsSection';
+import { GuardianCallButton } from './GuardianCallButton';
 import { useStudentGuardians, useStudentProfile } from './hooks';
 
 type Route = RouteProp<RootStackParamList, 'StudentProfile'>;
-
-// StudentAttendanceTab (section 10: monthly calendar, term %, absence
-// records) isn't its own numbered build task — attendance.mark/view_board
-// screens exist (task 9-10), but this specific calendar view is still open.
-const upcomingTabs = [{ label: 'Attendance history (calendar view)', buildTask: null as number | null }];
 
 export function StudentProfileScreen() {
   const { params } = useRoute<Route>();
   const profile = useStudentProfile(params.studentId);
   const guardians = useStudentGuardians(params.studentId);
   const marks = useStudentMarks(params.studentId);
+  const currentTerm = useCurrentTerm();
+  const termPosition = useStudentTermPosition(params.studentId, currentTerm.data?.id);
+  const termTrend = useStudentTermTrend(params.studentId);
+  const staff = useAuthStore((s) => s.staff);
+  const queryClient = useQueryClient();
+  const [statusBusy, setStatusBusy] = useState(false);
 
   if (profile.isLoading) {
     return (
@@ -40,6 +47,36 @@ export function StudentProfileScreen() {
   const s = profile.data;
   const displayName = s.preferredName || s.fullName;
 
+  async function toggleLeft() {
+    const next = s.status === 'left' ? 'active' : 'left';
+    Alert.alert(
+      next === 'left' ? 'Mark as left?' : 'Reactivate this student?',
+      next === 'left'
+        ? `${displayName} will be removed from rosters and counts. All their records are kept.`
+        : `${displayName} will reappear on rosters and counts.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: next === 'left' ? 'Mark as left' : 'Reactivate',
+          style: next === 'left' ? 'destructive' : 'default',
+          onPress: () => void doToggleLeft(next),
+        },
+      ],
+    );
+  }
+
+  async function doToggleLeft(next: 'active' | 'left') {
+    setStatusBusy(true);
+    try {
+      await setStudentStatus(s.id, next);
+      await queryClient.invalidateQueries({ queryKey: ['students'] });
+    } catch {
+      Alert.alert('Could not update this student', 'You may not have permission to do this.');
+    } finally {
+      setStatusBusy(false);
+    }
+  }
+
   return (
     <Screen>
       <ScreenHeader title={displayName} subtitle={s.admissionNo}>
@@ -52,6 +89,8 @@ export function StudentProfileScreen() {
         <Row label="Date of birth" value={s.dateOfBirth ?? '—'} />
       </Card>
 
+      <AttendanceHistoryCalendar studentId={s.id} />
+
       {guardians.data && guardians.data.length > 0 ? (
         <Card>
           <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>GUARDIANS</Text>
@@ -61,12 +100,7 @@ export function StudentProfileScreen() {
                 {g.fullName} {g.isPrimary ? '· Primary' : ''}
               </Text>
               <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{g.relationship ?? ''}</Text>
-              <Button
-                label={g.phonePrimary}
-                variant="ghost"
-                size="sm"
-                onPress={() => Linking.openURL(`tel:${g.phonePrimary}`)}
-              />
+              <GuardianCallButton studentId={s.id} guardianId={g.guardianId} phone={g.phonePrimary} />
             </View>
           ))}
         </Card>
@@ -75,6 +109,27 @@ export function StudentProfileScreen() {
       {marks.data && marks.data.length > 0 ? (
         <Card>
           <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>MARKS</Text>
+          {termPosition.data?.avgScore != null ? (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs }}>
+              <Text style={{ ...typography.body, color: semantic.textPrimary }}>
+                {currentTerm.data?.name ?? 'This term'} average
+              </Text>
+              <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>
+                {termPosition.data.avgScore}
+                {termPosition.data.classPosition ? ` · ${ordinal(termPosition.data.classPosition)} of ${termPosition.data.classSize}` : ''}
+              </Text>
+            </View>
+          ) : null}
+          {termTrend.data && termTrend.data.length > 1 ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingVertical: spacing.xs }}>
+              {termTrend.data.map((t) => (
+                <View key={t.termId} style={{ alignItems: 'center' }}>
+                  <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{t.termName}</Text>
+                  <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>{t.avgScore}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
           {marks.data.map((m, i) => (
             <View key={`${m.subjectName}-${m.termName}-${i}`} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs }}>
               <View>
@@ -97,20 +152,25 @@ export function StudentProfileScreen() {
       <ActivitySection studentId={s.id} />
       <BenefitsSection studentId={s.id} />
 
-      <Card>
-        <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>MORE ABOUT THIS STUDENT</Text>
-        {upcomingTabs.map((tab) => (
-          <View
-            key={tab.label}
-            style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs }}
-          >
-            <Text style={{ ...typography.body, color: semantic.textPrimary }}>{tab.label}</Text>
-            <StatusPill label={tab.buildTask ? `Build task ${tab.buildTask}` : 'Not built yet'} tone="gold" />
-          </View>
-        ))}
-      </Card>
+      {staff ? (
+        <Card>
+          <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>RECORD</Text>
+          <Button
+            label={s.status === 'left' ? 'Reactivate this student' : 'Mark as left'}
+            variant={s.status === 'left' ? 'outline' : 'danger'}
+            onPress={() => void toggleLeft()}
+            loading={statusBusy}
+          />
+        </Card>
+      ) : null}
     </Screen>
   );
+}
+
+function ordinal(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
 }
 
 function Row({ label, value }: { label: string; value: string }) {

@@ -27,9 +27,40 @@ export async function fetchGradeNames(): Promise<Record<string, string>> {
   return map;
 }
 
+export type AtRiskStudent = { studentId: string; fullName: string; className: string; consecutiveAbsentDays: number; termPct: number };
+
+/** FR-ANL-02: "students at risk by consecutive absence or low attendance are listed, most severe first." */
+type AtRiskRpcRow = { student_id: string; full_name: string; class_name: string; consecutive_absent_days: number; term_pct: number };
+
+export async function fetchStudentsAtRisk(): Promise<AtRiskStudent[]> {
+  // .returns<T[]>() fights with the client's own inference for a set-returning
+  // RPC call (see fetchMarkingStatus's comment in attendance/api.ts) — cast after the await instead.
+  const { data, error } = await supabase.rpc('students_at_risk');
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as AtRiskRpcRow[];
+  return rows.map((r) => ({
+    studentId: r.student_id,
+    fullName: r.full_name,
+    className: r.class_name,
+    consecutiveAbsentDays: r.consecutive_absent_days,
+    termPct: r.term_pct,
+  }));
+}
+
 export async function exportAttendanceSummary(termId: string): Promise<string> {
   const { data, error } = await supabase.functions.invoke<{ url: string; row_count: number }>(
     `export-report?report=attendance_summary&term_id=${termId}`,
+    { method: 'GET' },
+  );
+  if (error) throw error;
+  if (!data?.url) throw new Error('Export failed');
+  return data.url;
+}
+
+/** FR-ANL-04: "attendance AND marks reports may be exported in a spreadsheet format." */
+export async function exportMarksSummary(termId: string): Promise<string> {
+  const { data, error } = await supabase.functions.invoke<{ url: string; row_count: number }>(
+    `export-report?report=marks_summary&term_id=${termId}`,
     { method: 'GET' },
   );
   if (error) throw error;

@@ -70,6 +70,13 @@ export function InventoryItemScreen() {
       </ScreenHeader>
 
       <Card>
+        <Row label="Location" value={item.data.location ?? '—'} />
+        <Row label="Condition" value={item.data.condition ?? '—'} />
+        <Row label="Code" value={item.data.code ?? '—'} />
+        <Row label="Minimum quantity" value={String(item.data.minQuantity)} />
+      </Card>
+
+      <Card>
         <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>RECORD MOVEMENT</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
           {txnTypes.map((t) => (
@@ -95,5 +102,14 @@ export function InventoryItemScreen() {
         ))}
       </View>
     </Screen>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+      <Text style={{ ...typography.body, color: semantic.textSecondary }}>{label}</Text>
+      <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>{value}</Text>
+    </View>
   );
 }

@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase';
 
 export type SubjectOption = { subjectId: string; name: string };
 
-/** Subjects available for a class's grade (grade_subjects) — the simplest reliable picker source; class_subject_teachers assignments may not exist yet for every class. */
+/** All subjects offered for a class's grade — used as the fallback picker source for a reviewer (sectional head/principal) who isn't necessarily any one subject's assigned teacher. */
 export async function listSubjectsForClass(classId: string): Promise<SubjectOption[]> {
   const { data, error } = await supabase
     .from('classes')
@@ -13,6 +13,31 @@ export async function listSubjectsForClass(classId: string): Promise<SubjectOpti
   if (error) throw error;
   const list = data?.grades?.grade_subjects ?? [];
   return list.filter((g) => g.subjects != null).map((g) => ({ subjectId: g.subjects!.id, name: g.subjects!.name }));
+}
+
+/**
+ * FR-MRK-01: "each class-subject pairing has an assigned teacher." A class
+ * teacher entering marks should only see the subjects they're actually
+ * assigned via class_subject_teachers for this class — otherwise anyone
+ * holding class-scoped marks.enter could pick any subject the grade
+ * offers. If this staff member has no explicit assignment row for the
+ * class at all, falls back to the full grade subject list: that's the
+ * sectional-head/principal case (marks.enter at grade/school scope,
+ * reviewing or entering on a teacher's behalf), not a gap in the class
+ * teacher's own restriction.
+ */
+export async function listSubjectsForTeacherInClass(classId: string, staffId: string): Promise<SubjectOption[]> {
+  const { data, error } = await supabase
+    .from('class_subject_teachers')
+    .select('subject_id, subjects(id, name)')
+    .eq('class_id', classId)
+    .eq('staff_id', staffId)
+    .returns<{ subject_id: string; subjects: { id: string; name: string } | null }[]>();
+  if (error) throw error;
+  if (data && data.length > 0) {
+    return data.filter((r) => r.subjects != null).map((r) => ({ subjectId: r.subjects!.id, name: r.subjects!.name }));
+  }
+  return listSubjectsForClass(classId);
 }
 
 export type CurrentTerm = { id: string; name: string };
@@ -156,4 +181,65 @@ export async function fetchClassSubjectAverage(classId: string, subjectId: strin
   const { data, error } = await supabase.rpc('class_subject_average', { p_class_id: classId, p_subject_id: subjectId, p_term_id: termId });
   if (error) throw error;
   return (data as number | null) ?? null;
+}
+
+export type TermPosition = { avgScore: number | null; classPosition: number | null; classSize: number };
+
+/** FR-MRK-06: "a student's term average and position within the class are shown." */
+export async function fetchStudentTermPosition(studentId: string, termId: string): Promise<TermPosition | null> {
+  const { data, error } = await supabase
+    .rpc('student_class_position', { p_student_id: studentId, p_term_id: termId })
+    .maybeSingle<{ avg_score: number | null; class_position: number | null; class_size: number }>();
+  if (error) throw error;
+  if (!data) return null;
+  return { avgScore: data.avg_score, classPosition: data.class_position, classSize: data.class_size };
+}
+
+export type TermTrendPoint = { termId: string; termName: string; sequence: number; avgScore: number };
+
+/** FR-MRK-07: "a student's average is presented across terms so that a trend is visible." */
+export async function fetchStudentTermTrend(studentId: string): Promise<TermTrendPoint[]> {
+  const { data, error } = await supabase.rpc('student_term_trend', { p_student_id: studentId });
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as { term_id: string; term_name: string; sequence: number; avg_score: number }[];
+  return rows.map((r) => ({ termId: r.term_id, termName: r.term_name, sequence: r.sequence, avgScore: r.avg_score }));
+}
+
+export type OutstandingMarkSheet = {
+  classId: string;
+  className: string;
+  subjectId: string;
+  subjectName: string;
+  termId: string;
+  termName: string;
+  teacherName: string;
+  status: 'not_started' | 'draft' | 'submitted' | 'reopened';
+};
+
+/** FR-MRK-08: "... including which mark sheets are outstanding." Includes combinations that have no mark_sheets row at all yet, not just drafts. */
+type OutstandingMarkSheetRpcRow = {
+  class_id: string;
+  class_name: string;
+  subject_id: string;
+  subject_name: string;
+  term_id: string;
+  term_name: string;
+  teacher_name: string;
+  status: string;
+};
+
+export async function fetchOutstandingMarkSheets(termId?: string): Promise<OutstandingMarkSheet[]> {
+  const { data, error } = await supabase.rpc('outstanding_mark_sheets', { p_term_id: termId ?? null });
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as OutstandingMarkSheetRpcRow[];
+  return rows.map((r) => ({
+    classId: r.class_id,
+    className: r.class_name,
+    subjectId: r.subject_id,
+    subjectName: r.subject_name,
+    termId: r.term_id,
+    termName: r.term_name,
+    teacherName: r.teacher_name,
+    status: r.status as OutstandingMarkSheet['status'],
+  }));
 }

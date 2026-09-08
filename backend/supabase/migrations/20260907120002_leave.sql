@@ -84,3 +84,57 @@ create policy withdraw_leave on leave_requests for update
 -- Approving/rejecting is not a plain client update (section 11: approval
 -- must atomically touch balances + cover + notifications) — see
 -- approve_leave()/reject_leave() below.
+
+-- FR-LVE-03: "a new request notifies the approver and appears in their
+-- pending list." The pending-list half already worked (read_leave_requests
+-- RLS); nothing ever notified the approver. Section 15 open decision #2's
+-- interim default is "principal approves all," so the recipient set is
+-- every active staff member currently holding leave.approve — in practice
+-- just the principal, but this stays correct if that decision changes
+-- later to include section-level approvers, since it re-derives from
+-- has_permission() rather than a hardcoded role.
+create or replace function notify_leave_request_submitted()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_requester text;
+  v_approver uuid;
+begin
+  select full_name into v_requester from staff where id = new.staff_id;
+  for v_approver in
+    select id from staff where status = 'active' and has_permission(id, 'leave.approve')
+  loop
+    insert into notifications (staff_id, type, title, body, payload)
+    values (v_approver, 'leave.requested', 'New leave request',
+      format('%s requested leave from %s to %s.', coalesce(v_requester, 'A staff member'), new.starts_on, new.ends_on),
+      jsonb_build_object('leave_request_id', new.id, 'staff_id', new.staff_id));
+  end loop;
+  return new;
+end;
+$$;
+
+create trigger leave_request_submitted
+  after insert on leave_requests
+  for each row execute function notify_leave_request_submitted();
+
+-- FR-LVE-04: "the approver is shown ... how many other staff are already
+-- on leave for those dates." Runs as the caller (no SECURITY DEFINER), so
+-- it only ever counts rows read_leave_requests already lets them see —
+-- for anyone holding leave.approve that's everyone, which is exactly who
+-- is meant to call this.
+create or replace function count_staff_on_leave(p_starts date, p_ends date, p_exclude_staff uuid)
+returns integer
+language sql
+stable
+as $$
+  select count(distinct staff_id)::int
+  from leave_requests
+  where status = 'approved'
+    and staff_id <> p_exclude_staff
+    and starts_on <= p_ends
+    and ends_on >= p_starts;
+$$;
+grant execute on function count_staff_on_leave(date, date, uuid) to authenticated;

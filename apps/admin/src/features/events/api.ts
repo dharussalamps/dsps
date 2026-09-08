@@ -29,10 +29,30 @@ export async function getEvent(eventId: string): Promise<EventDetail | null> {
   return { id: data.id, title: data.title, startsOn: data.starts_on, endsOn: data.ends_on, category: data.category, description: data.description, location: data.location, responsibleName: data.staff?.full_name ?? null };
 }
 
-export async function createEvent(input: { title: string; description?: string; startsOn: string; endsOn?: string; location?: string; createdBy: string }): Promise<string> {
+export async function createEvent(input: {
+  title: string;
+  description?: string;
+  category?: string;
+  startsOn: string;
+  endsOn?: string;
+  location?: string;
+  responsibleId?: string;
+  reminderDays?: number[];
+  createdBy: string;
+}): Promise<string> {
   const { data, error } = await supabase
     .from('events')
-    .insert({ title: input.title, description: input.description || null, starts_on: input.startsOn, ends_on: input.endsOn || null, location: input.location || null, created_by: input.createdBy })
+    .insert({
+      title: input.title,
+      description: input.description || null,
+      category: input.category || null,
+      starts_on: input.startsOn,
+      ends_on: input.endsOn || null,
+      location: input.location || null,
+      responsible_id: input.responsibleId || null,
+      reminder_days: input.reminderDays && input.reminderDays.length > 0 ? input.reminderDays : undefined,
+      created_by: input.createdBy,
+    })
     .select('id')
     .single();
   if (error) throw error;

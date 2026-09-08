@@ -1,8 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, Linking, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Screen, ScreenHeader } from '@/components';
+import { Button, Card, EmptyState, Screen, ScreenHeader, StatusPill } from '@/components';
 import { semantic, spacing, typography } from '@/theme/tokens';
-import { exportAttendanceSummary } from './api';
+import { exportAttendanceSummary, exportMarksSummary, fetchStudentsAtRisk } from './api';
 import { useCurrentTermId, useGradeNames, useSummaries } from './hooks';
 
 export function AnalyticsScreen() {
@@ -10,20 +11,21 @@ export function AnalyticsScreen() {
   const school = useSummaries(termId.data ?? undefined, 'school');
   const grades = useSummaries(termId.data ?? undefined, 'grade');
   const gradeNames = useGradeNames();
-  const [exporting, setExporting] = useState(false);
+  const atRisk = useQuery({ queryKey: ['analytics', 'at-risk'], queryFn: fetchStudentsAtRisk });
+  const [exporting, setExporting] = useState<'attendance' | 'marks' | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
 
-  async function doExport() {
+  async function doExport(kind: 'attendance' | 'marks') {
     if (!termId.data) return;
-    setExporting(true);
+    setExporting(kind);
     setExportError(null);
     try {
-      const url = await exportAttendanceSummary(termId.data);
+      const url = kind === 'attendance' ? await exportAttendanceSummary(termId.data) : await exportMarksSummary(termId.data);
       await Linking.openURL(url);
     } catch {
       setExportError('Could not generate the export.');
     } finally {
-      setExporting(false);
+      setExporting(null);
     }
   }
 
@@ -48,7 +50,10 @@ export function AnalyticsScreen() {
   return (
     <Screen>
       <ScreenHeader title="Analytics" subtitle="This term">
-        <Button label="Export CSV" size="sm" variant="outline" loading={exporting} onPress={() => void doExport()} />
+        <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+          <Button label="Attendance CSV" size="sm" variant="outline" loading={exporting === 'attendance'} onPress={() => void doExport('attendance')} />
+          <Button label="Marks CSV" size="sm" variant="outline" loading={exporting === 'marks'} onPress={() => void doExport('marks')} />
+        </View>
       </ScreenHeader>
 
       {exportError ? <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{exportError}</Text> : null}
@@ -74,6 +79,27 @@ export function AnalyticsScreen() {
         ))}
         {grades.data && grades.data.length === 0 ? <EmptyState title="No grade summaries yet" /> : null}
       </View>
+
+      {/* FR-ANL-02: "students at risk by consecutive absence or low attendance are listed, most severe first." */}
+      {atRisk.data && atRisk.data.length > 0 ? (
+        <View style={{ gap: spacing.sm }}>
+          <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>STUDENTS AT RISK</Text>
+          {atRisk.data.map((s) => (
+            <Card key={s.studentId} flat>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View>
+                  <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>{s.fullName}</Text>
+                  <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{s.className}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                  {s.consecutiveAbsentDays > 0 ? <StatusPill label={`${s.consecutiveAbsentDays} days in a row`} tone="error" /> : null}
+                  <StatusPill label={`${s.termPct}% this term`} tone="warning" />
+                </View>
+              </View>
+            </Card>
+          ))}
+        </View>
+      ) : null}
     </Screen>
   );
 }

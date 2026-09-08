@@ -1164,3 +1164,162 @@ claimed as verified.
   reads-pending rows" — a row that means *unread* can't simultaneously
   default its read timestamp to the moment it was created. `read_at` is
   null until the recipient actually opens it.
+
+### Phase 17: full SRS re-audit and hardening (2026-09-08)
+
+A complete re-read of `docs/AdminSRS.pdf` against the code as it stood
+after Phase 16, done via five parallel read-only audits (one per module
+group) cross-checked against this file's own section 17 notes above. The
+audits surfaced real correctness/security bugs beyond what earlier phases
+had disclosed, plus a long list of P1/P2 requirements that were
+data-model-ready but never reachable from the app. Fixed in this pass,
+migrations `20260908000001` through `20260908000011` plus in-place edits to
+several earlier migrations (safe pre-deployment — see the "no live
+Supabase project" caveat repeated throughout this file):
+
+**Bugs fixed (not merely gaps):**
+- `current_staff_id()` now excludes deactivated staff, so a deactivated
+  account loses all server-side access immediately rather than only being
+  blocked from a *future* sign-in (FR-AUTH-06). A new `assert_active_session()`
+  RPC plus `useSessionLiveness()` (polls every 45s and on app foreground)
+  forces a local sign-out promptly when this happens.
+- `read_staff_attendance`'s RLS silently misreported every colleague as
+  "not checked in" for a grade-scoped sectional head (`has_permission()`'s
+  grade branch needs a class_id it never received) — fixed via
+  `can_view_staff_attendance()` (FR-SAT-03).
+- `create_announcement`'s permission check had the same class-id-less bug
+  (a sectional head's `announcement.publish_section` could never actually
+  work) and never validated that `audience_ids` fell within the caller's
+  own granted scope at all — fixed via `can_publish_to_audience()`
+  (FR-ANN-02). Administrator now holds `announcement.publish_all` (SRS
+  §4.2: "Publish announcement... Admin = Staff"), previously missing
+  entirely.
+- Vice-principal's blanket "every permission except two keys" grant leaked
+  `student.view_benefits`, contradicting FR-ACH-05's explicit "only the
+  principal, an administrator, and the student's own class teacher."
+  Excluded.
+- `read_attendance_summaries` had the identical class-id-less bug for
+  `grade`/`student` scope rows — fixed via `can_view_attendance_summary()`,
+  which is what let FR-ANL-02 (students at risk) get built at all.
+- NFR-SEC-06: sign-out now clears the TanStack Query cache and all local
+  SQLite tables (`clearAllLocalData()`), with a warning first if unsynced
+  offline writes would be lost.
+
+**P1 features built (previously missing entirely, not just deferred):**
+- FR-STU-12 (mark a student left), FR-ADM-02 (revoke a role assignment) —
+  UI wired to RPCs/policies that already existed.
+- FR-ADM-03 / FR-CAL-01: a real admin surface for academic years, terms,
+  working days, grades, subjects, classes, and class-subject-teacher
+  assignments (`AcademicStructureScreen`, new `write_grades` /
+  `write_subjects` / `write_grade_subjects` / `write_classes` RLS
+  policies — previously these tables had no write policy of any kind).
+- FR-ADM-04: a generic `audit_row_change()` trigger now covers every table
+  that was writable directly from the client with no audit trail at all
+  (staff, staff_roles, calendar_days, school_settings, achievements,
+  memberships, benefits, inventory, events, diary, responsibilities,
+  grades/classes/subjects/terms/years, guardians, students). Attendance/
+  marks/leave/cover/announcements were left alone — they already call
+  `write_audit_log()` explicitly and a second generic trigger would double
+  every entry.
+- FR-ADM-06: staff import (`import_staff()`, mirroring `import_students()`'s
+  per-row-savepoint shape) — previously students only, despite being P1 for
+  both.
+- FR-CAL-06: `declare_closure()` (upsert + notify every active staff
+  member, audited) plus a Home quick action — previously the day-type
+  upsert existed but nothing notified anyone and there was no entry point.
+- FR-ATT-05/06/08: there was no UI anywhere to edit an already-submitted
+  day (within the window) or amend one after it (admin + reason) — now on
+  `StudentProfileScreen`'s new `AttendanceHistoryCalendar`.
+- FR-ATT-12: `remind_unmarked_classes_bulk()` — only a per-class reminder
+  existed.
+- FR-ATT-14 (P1, was still a stub): student attendance history as a real
+  monthly calendar, distinguishing present/absent/late/early-leave.
+- FR-MRK-01: mark entry is now scoped to a teacher's own
+  `class_subject_teachers` assignment where one exists (falls back to the
+  full grade subject list for a reviewer with no assignment of their own).
+- FR-COV-01: `assign_cover()` had no client caller at all — new
+  `AssignCoverScreen`.
+- FR-LVE-04: the approver previously saw neither the requester's balance
+  nor how many other staff were on leave for the same dates before
+  approving — both now shown on `LeaveRequestDetailScreen`.
+- FR-LVE-07/10: `approve_leave()` had no `remarks` parameter — only
+  rejection could carry one.
+- FR-LVE-03: nothing notified the approver when a request was submitted
+  (only on decision) — a new `AFTER INSERT` trigger.
+- FR-ACH-04: benefits could only ever be marked *collected*, never
+  *recorded* — `BenefitsSection` no longer returns `null` when empty and
+  now has an add form.
+- FR-STF-05: staff profile attendance summary and leave-taken were
+  literally "Not built yet" placeholders — now real, gated by the same
+  `can_view_staff_attendance()`/`can_view_staff_leave()` RLS as everywhere
+  else.
+- FR-SAT-04: the staff board now shows, for an absent/on-leave class
+  teacher, their class and whether it's been marked.
+- Real push delivery: `job_dispatch_push()` (pg_net → Expo's push API,
+  cron every minute) — every "notified" job before this only ever wrote a
+  `notifications` row that nothing turned into an actual device
+  notification.
+- An in-app notification center (`NotificationsScreen`) — even the in-app
+  fallback was previously unreachable; nothing ever queried the
+  `notifications` table from the client. `ScreenHeader` (rendered by every
+  screen) now carries a bell with an unread badge, which is also what
+  satisfies FR-ANN-06's "reachable from every screen."
+- FR-ANL-02: `students_at_risk()` — risk detection fired notifications but
+  there was never a queryable, ranked list anywhere (Home + Analytics).
+- FR-ANL-04: marks export (`export-report?report=marks_summary`) —
+  attendance-only before this.
+
+**P2s built:** FR-ANN-05 (read receipts — the RLS only ever let a reader
+see *their own* read row, not the author seeing everyone's), FR-ANN-04
+(schedule picker UI; backend already supported `publish_at`), FR-MRK-06/07
+(term average + class position, and a cross-term trend), FR-MRK-08
+(outstanding sheets now include combinations with no row yet, not only
+drafts), FR-STF-03 (directory presence indicator), FR-DRY-02 (year filter
+UI on the diary), FR-CAL-07 (confirmation dialog before saving a past
+day's type change), FR-STU-08 (call-purpose logging — new `call_logs`
+table, previously named in this document's own §4.9 but never built),
+FR-AUTH-04 (biometric unlock — `expo-local-authentication` newly added;
+implemented as an app-resume lock screen gating an already-valid session,
+not a SignIn-screen button, since Supabase's session model has no
+per-launch credential prompt for a button to replace — see
+`src/store/authStore.ts`'s `locked` state and `useBiometricLock()`).
+Also: missing create-form fields that already existed in the schema and
+API but were never surfaced — inventory `location`/`condition`/`code`,
+event `description`/`category`/`ends_on`/`location`/`responsible_id`/
+`reminder_days`.
+
+**Still open after this pass** (spot-checked, not exhaustively re-audited):
+- i18n extraction (task 22) and the auth-rate-limiting/backup-restore
+  items from task 23 — unchanged, see those notes above.
+- FR-AUTH-01/03: sign-in is still by email (not `staff_no`), and the OTP
+  reset flow still doesn't check the phone belongs to a registered staff
+  member before issuing a code. Changing the sign-in identifier is a
+  bigger architectural change (Supabase Auth keys on email/phone, not an
+  arbitrary column) that wasn't attempted without a live project to verify
+  against.
+- FR-EVT-02: still one hybrid per-month list, not a true month grid or a
+  separate annual list view.
+- FR-STU-09 (unified chronological timeline), FR-STU-11 (bulk promote to
+  next grade), FR-ACH-03 (student class responsibility), FR-CAL-09 (bulk
+  holiday import), FR-INV-06 (barcode scan), FR-NOT-06 (per-category
+  notification preferences — still just a single push-enable toggle),
+  FR-SAT-05 (staff day export) — all P2/P3, not attempted.
+- NFR-SEC-07 (signed, time-limited upload links) has nothing to protect
+  yet: no photo/attachment upload feature exists anywhere in the client
+  (student photos, leave attachments, event/diary photos) — no
+  file/image-picker library is installed. The one upload path that does
+  exist (report export) already uses a private bucket + signed URL
+  correctly.
+- Photo consent (`photo_consent`) is stored and fetched but still never
+  surfaced or enforced in any UI — moot while there's no photo upload
+  feature to gate.
+- Retention/purge policy for left students (NFR-PRV-05) — not built.
+- FR-ANL-01/03: the analytics screen still has no period selector and no
+  by-subject academic-performance report (marks export exists now, but a
+  browsable subject×class comparison view does not).
+
+Verified after this pass: `tsc --noEmit`, `eslint` (both zero warnings on
+`src`), `vitest run` (17/17), and `expo export --platform android` (1580
+modules, no bundler errors) all pass. As with every earlier phase, none of
+this was run against a live Supabase project — every migration is
+reviewed, not executed.

@@ -1,13 +1,15 @@
 import 'react-native-gesture-handler';
 import '@/i18n';
 import { DefaultTheme, NavigationContainer, Theme } from '@react-navigation/native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initAttendanceOffline } from '@/features/attendance/init';
 import { useSyncEngine } from '@/lib/offline';
+import { queryClient } from '@/lib/queryClient';
+import { useSessionLiveness } from '@/store/authStore';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { colors, semantic } from '@/theme/tokens';
 
@@ -24,17 +26,9 @@ const navigationTheme: Theme = {
   },
 };
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 2,
-      staleTime: 30_000,
-    },
-  },
-});
-
 export default function App() {
   useSyncEngine();
+  useSessionLiveness();
   useEffect(() => {
     void initAttendanceOffline();
   }, []);

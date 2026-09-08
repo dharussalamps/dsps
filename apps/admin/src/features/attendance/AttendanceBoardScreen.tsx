@@ -7,7 +7,7 @@ import { Button, Card, EmptyState, ScreenHeader, StatusPill, SyncStatusBadge } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { RootStackParamList } from '@/navigation/types';
 import { semantic, spacing, typography } from '@/theme/tokens';
-import { remindUnmarkedClass } from './api';
+import { remindUnmarkedClass, remindUnmarkedClassesBulk } from './api';
 import { todayIso, useMarkingStatus, useStaffAttendanceToday } from './hooks';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -57,7 +57,10 @@ function ClassBoard({ onDate, onOpenClass }: { onDate: string; onOpenClass: (cla
   const status = useMarkingStatus(onDate);
   const queryClient = useQueryClient();
   const [reminding, setReminding] = useState<string | null>(null);
+  const [remindingAll, setRemindingAll] = useState(false);
   const [remindError, setRemindError] = useState<string | null>(null);
+
+  const unmarkedCount = (status.data ?? []).filter((c) => !c.submitted).length;
 
   async function remind(classId: string) {
     setReminding(classId);
@@ -77,6 +80,21 @@ function ClassBoard({ onDate, onOpenClass }: { onDate: string; onOpenClass: (cla
     }
   }
 
+  /** FR-ATT-12: reminds every unmarked class in scope in one action. */
+  async function remindAll() {
+    setRemindingAll(true);
+    setRemindError(null);
+    try {
+      const count = await remindUnmarkedClassesBulk(onDate);
+      setRemindError(count > 0 ? `Reminded ${count} ${count === 1 ? 'class' : 'classes'}.` : 'Nothing to remind right now.');
+    } catch {
+      setRemindError("Couldn't send reminders.");
+    } finally {
+      setRemindingAll(false);
+      await queryClient.invalidateQueries({ queryKey: ['attendance', 'marking-status'] });
+    }
+  }
+
   if (status.isLoading) return <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />;
 
   return (
@@ -85,7 +103,17 @@ function ClassBoard({ onDate, onOpenClass }: { onDate: string; onOpenClass: (cla
       keyExtractor={(item) => item.classId}
       contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm, paddingBottom: spacing.xl }}
       ListHeaderComponent={
-        remindError ? <Text style={{ ...typography.caption, color: semantic.textSecondary, marginBottom: spacing.sm }}>{remindError}</Text> : null
+        <View style={{ gap: spacing.sm, marginBottom: spacing.sm }}>
+          {unmarkedCount > 1 ? (
+            <Button
+              label={`Remind ${unmarkedCount} unmarked classes`}
+              variant="outline"
+              loading={remindingAll}
+              onPress={() => void remindAll()}
+            />
+          ) : null}
+          {remindError ? <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{remindError}</Text> : null}
+        </View>
       }
       ListEmptyComponent={<EmptyState title="No classes in scope" />}
       renderItem={({ item }) => (
@@ -132,6 +160,11 @@ function StaffBoard({ onDate }: { onDate: string }) {
             <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>{item.fullName}</Text>
             <StatusPill label={staffStatusLabel[item.status]} tone={staffStatusTone[item.status]} />
           </View>
+          {item.affectedClass ? (
+            <Text style={{ ...typography.caption, color: semantic.textSecondary, marginTop: spacing.xs }}>
+              {item.affectedClass.className} · {item.affectedClass.marked ? 'attendance marked' : 'attendance not yet marked'}
+            </Text>
+          ) : null}
         </Card>
       )}
     />

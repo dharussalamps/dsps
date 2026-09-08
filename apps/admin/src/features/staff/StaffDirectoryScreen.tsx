@@ -6,10 +6,14 @@ import { Button, Card, EmptyState, ScreenHeader, StatusPill, TextField } from '@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { RootStackParamList } from '@/navigation/types';
 import { semantic, spacing, typography } from '@/theme/tokens';
-import { useDutyRoster, useStaffDirectory } from './hooks';
+import { todayIso } from '@/features/attendance/hooks';
+import { useDutyRoster, useStaffDirectory, useTodayPresence } from './hooks';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Tab = 'people' | 'duties';
+
+const presenceTone: Record<string, 'success' | 'warning' | 'neutral'> = { present: 'success', late: 'warning', on_leave: 'neutral' };
+const presenceLabel: Record<string, string> = { present: 'In today', late: 'Late today', on_leave: 'On leave' };
 
 export function StaffDirectoryScreen() {
   const navigation = useNavigation<Nav>();
@@ -17,6 +21,8 @@ export function StaffDirectoryScreen() {
   const [tab, setTab] = useState<Tab>('people');
   const staff = useStaffDirectory(query);
   const duties = useDutyRoster();
+  // FR-STF-03: "the directory indicates each colleague's presence for the current day."
+  const presence = useTodayPresence(todayIso());
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background }} edges={['top', 'left', 'right']}>
@@ -47,7 +53,12 @@ export function StaffDirectoryScreen() {
                       </View>
                       <Button label="Call" size="sm" variant="outline" onPress={() => Linking.openURL(`tel:${item.phone}`)} />
                     </View>
-                    {item.status !== 'active' ? <StatusPill label={item.status} tone="neutral" /> : null}
+                    <View style={{ flexDirection: 'row', gap: spacing.xs, marginTop: 2 }}>
+                      {item.status !== 'active' ? <StatusPill label={item.status} tone="neutral" /> : null}
+                      {presence.data?.[item.id] ? (
+                        <StatusPill label={presenceLabel[presence.data[item.id]] ?? presence.data[item.id]} tone={presenceTone[presence.data[item.id]] ?? 'neutral'} />
+                      ) : null}
+                    </View>
                   </Card>
                 )}
               />

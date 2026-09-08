@@ -25,6 +25,10 @@ export function ComposeAnnouncementScreen() {
   const [body, setBody] = useState('');
   const [audience, setAudience] = useState<AudienceType>('all_staff');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [priority, setPriority] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
+  const [publishDate, setPublishDate] = useState('');
+  const [publishTime, setPublishTime] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -62,9 +66,26 @@ export function ComposeAnnouncementScreen() {
       setError('Choose at least one recipient.');
       return;
     }
+    let publishAt: string | undefined;
+    if (scheduling && publishDate.trim()) {
+      const parsed = new Date(`${publishDate.trim()}T${publishTime.trim() || '00:00'}:00`);
+      if (Number.isNaN(parsed.getTime())) {
+        setError('Check the scheduled date and time.');
+        return;
+      }
+      publishAt = parsed.toISOString();
+    }
+
     setSubmitting(true);
     try {
-      await composeAnnouncement({ title: title.trim(), body: body.trim(), audience, audienceIds: selectedIds });
+      await composeAnnouncement({
+        title: title.trim(),
+        body: body.trim(),
+        audience,
+        audienceIds: selectedIds,
+        priority: priority ? 1 : 0,
+        publishAt,
+      });
       navigation.goBack();
     } catch (err: unknown) {
       const message = (err as { message?: string })?.message ?? '';
@@ -123,8 +144,23 @@ export function ComposeAnnouncementScreen() {
           </View>
         ) : null}
 
+        <View style={{ flexDirection: 'row', gap: spacing.xs, marginTop: spacing.sm }}>
+          <Button label={priority ? 'High priority ✓' : 'Mark high priority'} size="sm" variant={priority ? 'primary' : 'outline'} onPress={() => setPriority((v) => !v)} />
+          <Button label={scheduling ? 'Publish now instead' : 'Schedule for later'} size="sm" variant={scheduling ? 'primary' : 'outline'} onPress={() => setScheduling((v) => !v)} />
+        </View>
+        {scheduling ? (
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <View style={{ flex: 1 }}>
+              <TextField label="Date" placeholder="YYYY-MM-DD" value={publishDate} onChangeText={setPublishDate} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <TextField label="Time (HH:MM)" placeholder="08:00" value={publishTime} onChangeText={setPublishTime} />
+            </View>
+          </View>
+        ) : null}
+
         {error ? <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{error}</Text> : null}
-        <Button label="Publish" onPress={() => void submit()} loading={submitting} />
+        <Button label={scheduling ? 'Schedule' : 'Publish'} onPress={() => void submit()} loading={submitting} />
       </Card>
     </Screen>
   );

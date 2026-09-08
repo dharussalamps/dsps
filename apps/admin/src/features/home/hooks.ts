@@ -1,5 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchIsSchoolDayToday, fetchMyClasses } from './api';
+import { fetchClassesNeedingCover, fetchIsSchoolDayToday, fetchMyClasses } from './api';
+
+export function useClassesNeedingCover(onDate: string) {
+  return useQuery({ queryKey: ['home', 'needs-cover', onDate], queryFn: () => fetchClassesNeedingCover(onDate) });
+}
 
 export function useMyClasses(staffId: string | undefined) {
   return useQuery({

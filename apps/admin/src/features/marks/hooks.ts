@@ -1,8 +1,26 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchClassSubjectAverage, fetchCurrentTerm, fetchStudentMarks, listSubjectsForClass, listVisibleMarkSheets } from './api';
+import {
+  fetchClassSubjectAverage,
+  fetchCurrentTerm,
+  fetchOutstandingMarkSheets,
+  fetchStudentMarks,
+  fetchStudentTermPosition,
+  fetchStudentTermTrend,
+  listSubjectsForClass,
+  listSubjectsForTeacherInClass,
+  listVisibleMarkSheets,
+} from './api';
 
 export function useSubjectsForClass(classId: string) {
   return useQuery({ queryKey: ['marks', 'subjects', classId], queryFn: () => listSubjectsForClass(classId) });
+}
+
+export function useSubjectsForTeacherInClass(classId: string, staffId: string | undefined) {
+  return useQuery({
+    queryKey: ['marks', 'subjects-for-teacher', classId, staffId],
+    queryFn: () => listSubjectsForTeacherInClass(classId, staffId as string),
+    enabled: !!staffId,
+  });
 }
 
 export function useCurrentTerm() {
@@ -25,5 +43,28 @@ export function useClassSubjectAverage(classId: string, subjectId: string, termI
   return useQuery({
     queryKey: ['marks', 'class-average', classId, subjectId, termId],
     queryFn: () => fetchClassSubjectAverage(classId, subjectId, termId),
+  });
+}
+
+export function useStudentTermPosition(studentId: string | undefined, termId: string | undefined) {
+  return useQuery({
+    queryKey: ['marks', 'term-position', studentId, termId],
+    queryFn: () => fetchStudentTermPosition(studentId as string, termId as string),
+    enabled: !!studentId && !!termId,
+  });
+}
+
+export function useStudentTermTrend(studentId: string | undefined) {
+  return useQuery({
+    queryKey: ['marks', 'term-trend', studentId],
+    queryFn: () => fetchStudentTermTrend(studentId as string),
+    enabled: !!studentId,
+  });
+}
+
+export function useOutstandingMarkSheets(termId?: string) {
+  return useQuery({
+    queryKey: ['marks', 'outstanding', termId],
+    queryFn: () => fetchOutstandingMarkSheets(termId),
   });
 }

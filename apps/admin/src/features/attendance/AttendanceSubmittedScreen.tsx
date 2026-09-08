@@ -1,8 +1,9 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
-import { Linking, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Button, Card, EmptyState, Screen, ScreenHeader, StatusPill, SyncStatusBadge } from '@/components';
+import { GuardianCallButton } from '@/features/students/GuardianCallButton';
 import type { RootStackParamList } from '@/navigation/types';
 import { spacing, typography, semantic } from '@/theme/tokens';
 import { fetchPrimaryGuardianPhones } from './api';
@@ -63,9 +64,7 @@ export function AttendanceSubmittedScreen() {
                     ) : null}
                   </View>
                   <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-                    {phone ? (
-                      <Button label="Call" size="sm" variant="outline" onPress={() => Linking.openURL(`tel:${phone}`)} />
-                    ) : null}
+                    {phone ? <GuardianCallButton studentId={a.studentId} phone={phone} /> : null}
                     <Button
                       label="View"
                       size="sm"

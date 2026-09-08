@@ -35,15 +35,63 @@ create table staff_attendance (
 );
 alter table staff_attendance enable row level security;
 
+-- FR-SAT-03 bug fix: has_permission(viewer, 'attendance.view_board') with
+-- no class_id can only ever match a school/self-scoped grant (see its
+-- 'grade' branch, which requires a class to resolve a grade_id from) — a
+-- grade-scoped sectional head's grant silently never matched here, so the
+-- staff board previously fell back to reading zero rows for every
+-- colleague and displayed them all as "not checked in" regardless of their
+-- real status. can_view_staff_attendance() (below) resolves the
+-- grade-scoped case by checking whether the target staff member currently
+-- teaches (directly, or via an active cover assignment) a class inside the
+-- viewer's granted grade.
+create or replace function can_view_staff_attendance(p_viewer uuid, p_target uuid)
+returns boolean language sql stable as $$
+  select
+    p_viewer = p_target
+    or exists (
+      select 1 from staff_roles sr
+      join role_permissions rp on rp.role_id = sr.role_id
+      where sr.staff_id = p_viewer
+        and sr.revoked_at is null
+        and rp.permission_key = 'attendance.view_board'
+        and sr.scope_type in ('school', 'self')
+    )
+    or exists (
+      select 1
+      from staff_roles viewer_sr
+      join role_permissions rp on rp.role_id = viewer_sr.role_id
+      where viewer_sr.staff_id = p_viewer
+        and viewer_sr.revoked_at is null
+        and rp.permission_key = 'attendance.view_board'
+        and viewer_sr.scope_type = 'grade'
+        and (
+          exists (
+            select 1 from staff_roles target_sr
+            join classes c on c.id = target_sr.scope_id
+            where target_sr.staff_id = p_target
+              and target_sr.revoked_at is null
+              and target_sr.scope_type = 'class'
+              and c.grade_id = viewer_sr.scope_id
+          )
+          or exists (
+            select 1 from cover_assignments ca
+            join classes c on c.id = ca.class_id
+            where ca.staff_id = p_target
+              and current_date between ca.starts_on and ca.ends_on
+              and c.grade_id = viewer_sr.scope_id
+          )
+        )
+    );
+$$;
+grant execute on function can_view_staff_attendance(uuid, uuid) to authenticated;
+
 -- section 15 open decision #1: self check-in. Everyone can see the staff
 -- board (it's what "switch student/staff tab" on AttendanceBoard shows —
 -- section 10), gated the same way as attendance.view_board's class
 -- version; a plain staff member can also always see their own row.
 create policy read_staff_attendance on staff_attendance for select
-  using (
-    staff_id = current_staff_id()
-    or has_permission(current_staff_id(), 'attendance.view_board')
-  );
+  using (can_view_staff_attendance(current_staff_id(), staff_id));
 create policy self_check_in on staff_attendance for insert
   with check (staff_id = current_staff_id() and status in ('present', 'late'));
 create policy self_check_in_update on staff_attendance for update

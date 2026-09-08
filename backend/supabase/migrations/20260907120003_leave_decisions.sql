@@ -8,7 +8,8 @@
 create or replace function approve_leave(
   p_request_id uuid,
   p_cover_staff_id uuid default null,
-  p_cover_not_needed boolean default false
+  p_cover_not_needed boolean default false,
+  p_remarks text default null
 ) returns void
 language plpgsql
 security definer
@@ -50,7 +51,8 @@ begin
       decided_by = current_staff_id(),
       decided_at = now(),
       cover_assignment_id = v_cover_assignment_id,
-      cover_not_needed = p_cover_not_needed
+      cover_not_needed = p_cover_not_needed,
+      remarks = p_remarks
   where id = p_request_id;
 
   select id into v_year_id from academic_years where is_current;
@@ -71,11 +73,14 @@ begin
   end loop;
 
   perform write_audit_log('approve', 'leave_requests', p_request_id, null,
-    jsonb_build_object('cover_assignment_id', v_cover_assignment_id, 'cover_not_needed', p_cover_not_needed));
+    jsonb_build_object('cover_assignment_id', v_cover_assignment_id, 'cover_not_needed', p_cover_not_needed, 'remarks', p_remarks));
 
   insert into notifications (staff_id, type, title, body, payload)
   values (v_request.staff_id, 'leave.approved', 'Leave approved',
-    format('Your leave from %s to %s has been approved.', v_request.starts_on, v_request.ends_on),
+    case when p_remarks is not null
+      then format('Your leave from %s to %s has been approved. %s', v_request.starts_on, v_request.ends_on, p_remarks)
+      else format('Your leave from %s to %s has been approved.', v_request.starts_on, v_request.ends_on)
+    end,
     jsonb_build_object('leave_request_id', p_request_id));
 
   if v_cover_assignment_id is not null then
@@ -86,7 +91,7 @@ begin
   end if;
 end;
 $$;
-grant execute on function approve_leave(uuid, uuid, boolean) to authenticated;
+grant execute on function approve_leave(uuid, uuid, boolean, text) to authenticated;
 
 create or replace function reject_leave(p_request_id uuid, p_remarks text default null)
 returns void

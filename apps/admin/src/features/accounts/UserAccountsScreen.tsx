@@ -1,13 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Text, View } from 'react-native';
 import { Button, Card, EmptyState, ScreenHeader, StatusPill, TextField } from '@/components';
 import { useClasses } from '@/features/students/hooks';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import { semantic, spacing, typography } from '@/theme/tokens';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { assignRole, createStaffAccount, setStaffStatus, type AccountRow } from './api';
+import { assignRole, createStaffAccount, revokeRole, setStaffStatus, type AccountRow } from './api';
 import { useAccounts, useRoles } from './hooks';
 import { ImportStudentsSection } from './ImportStudentsSection';
 
@@ -78,6 +78,11 @@ export function UserAccountsScreen() {
     await invalidate();
   }
 
+  async function doRevoke(staffRoleId: string) {
+    await revokeRole(staffRoleId);
+    await invalidate();
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background }} edges={['top', 'left', 'right']}>
       <View style={{ padding: spacing.lg, gap: spacing.md }}>
@@ -116,7 +121,20 @@ export function UserAccountsScreen() {
                   </Text>
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
                     {item.roles.map((r) => (
-                      <StatusPill key={r} label={r} tone="gold" />
+                      <View key={r.staffRoleId} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                        <StatusPill label={`${r.roleName} · ${r.scopeType}`} tone="gold" />
+                        <Button
+                          label="✕"
+                          size="sm"
+                          variant="ghost"
+                          onPress={() =>
+                            Alert.alert('Revoke this role?', `${r.roleName} (${r.scopeType}) will be removed from ${item.fullName}.`, [
+                              { text: 'Cancel', style: 'cancel' },
+                              { text: 'Revoke', style: 'destructive', onPress: () => void doRevoke(r.staffRoleId) },
+                            ])
+                          }
+                        />
+                      </View>
                     ))}
                   </View>
                 </View>

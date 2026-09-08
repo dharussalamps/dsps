@@ -19,14 +19,17 @@ const menu: MenuItem[] = [
   { label: 'Staff directory', route: 'StaffDirectory' },
   { label: 'My leave', route: 'MyLeave' },
   { label: 'Leave requests', route: 'LeaveRequests' },
+  { label: 'Assign cover teacher', route: 'AssignCover' },
   { label: 'Marks review', route: 'MarksReview' },
   { label: 'Inventory', route: 'Inventory' },
   { label: 'Events', route: 'EventCalendar' },
   { label: 'School diary', route: 'Diary' },
   { label: 'Academic calendar', route: 'AcademicCalendar' },
+  { label: 'Classes, subjects & terms', route: 'AcademicStructure' },
   { label: 'Analytics', route: 'Analytics' },
   { label: 'User accounts', route: 'UserAccounts' },
   { label: 'Audit log', route: 'AuditLog' },
+  { label: 'Notifications', route: 'Notifications' },
   { label: 'Settings', route: 'Settings' },
 ];
 

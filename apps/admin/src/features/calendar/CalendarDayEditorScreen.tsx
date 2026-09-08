@@ -1,7 +1,7 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Alert, Text, View } from 'react-native';
 import { Button, Card, Screen, ScreenHeader, TextField } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
@@ -32,7 +32,27 @@ export function CalendarDayEditorScreen() {
   const dayType = dayTypeOverride ?? day.data?.dayType ?? 'school';
   const label = labelOverride ?? day.data?.label ?? '';
 
-  async function save() {
+  const isPast = params.date < new Date().toISOString().slice(0, 10);
+  const isRealChange = day.data != null && dayType !== day.data.dayType;
+
+  // FR-CAL-07: "changing the type of a past day recalculates affected
+  // attendance percentages, and the user is warned before saving."
+  function save() {
+    if (isPast && isRealChange) {
+      Alert.alert(
+        'This day has already passed',
+        'Changing its type will recalculate attendance percentages for everyone affected the next time summaries run.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Save anyway', onPress: () => void doSave() },
+        ],
+      );
+      return;
+    }
+    void doSave();
+  }
+
+  async function doSave() {
     if (!staff) return;
     setSaving(true);
     try {
@@ -54,7 +74,7 @@ export function CalendarDayEditorScreen() {
           ))}
         </View>
         <TextField label="Label (optional)" value={label} onChangeText={setLabelOverride} />
-        <Button label={saved ? 'Saved ✓' : 'Save'} onPress={() => void save()} loading={saving} />
+        <Button label={saved ? 'Saved ✓' : 'Save'} onPress={save} loading={saving} />
         {dayType !== 'school' ? (
           <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
             Changing a past school day recomputes attendance percentages the next time summaries run.

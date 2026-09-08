@@ -8,10 +8,13 @@ import { semantic, spacing, typography } from '@/theme/tokens';
 import { addDiaryEntry } from './api';
 import { useDiaryEntries } from './hooks';
 
+const CURRENT_YEAR = new Date().getFullYear();
+
 export function DiaryScreen() {
   const staff = useAuthStore((s) => s.staff);
   const queryClient = useQueryClient();
-  const year = new Date().getFullYear();
+  // FR-DRY-02: "diary entries are presented as a chronological record filterable by year."
+  const [year, setYear] = useState(CURRENT_YEAR);
   const entries = useDiaryEntries(year);
 
   const [adding, setAdding] = useState(false);
@@ -39,6 +42,11 @@ export function DiaryScreen() {
         <ScreenHeader title="School diary" subtitle={String(year)}>
           <Button label={adding ? 'Cancel' : 'Add entry'} size="sm" onPress={() => setAdding((v) => !v)} />
         </ScreenHeader>
+        <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+          <Button label="◂" size="sm" variant="outline" onPress={() => setYear((y) => y - 1)} />
+          <Button label={String(year)} size="sm" variant="ghost" onPress={() => setYear(CURRENT_YEAR)} />
+          <Button label="▸" size="sm" variant="outline" onPress={() => setYear((y) => y + 1)} disabled={year >= CURRENT_YEAR} />
+        </View>
         {adding ? (
           <Card>
             <TextField label="Title" value={title} onChangeText={setTitle} />

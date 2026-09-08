@@ -46,11 +46,14 @@ export type RootStackParamList = {
 
   AcademicCalendar: undefined;
   CalendarDayEditor: { date: string };
+  AcademicStructure: undefined;
 
   Analytics: undefined;
   UserAccounts: undefined;
   AuditLog: undefined;
   Settings: undefined;
+  Notifications: undefined;
+  AssignCover: { classId?: string } | undefined;
 };
 
 export type AuthStackParamList = {

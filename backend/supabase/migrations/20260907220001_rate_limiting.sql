@@ -100,6 +100,14 @@ end;
 $$;
 grant execute on function remind_unmarked_class(uuid) to authenticated;
 
+-- Re-declared here (rather than only in 20260907150001_announcements.sql)
+-- because this migration's whole job is "the same function, plus a rate
+-- limit check" — CREATE OR REPLACE means whichever migration runs last
+-- wins, and this one runs after 150001's fix to the audience-scope check
+-- (see that file: can_publish_to_audience() replaced a bare
+-- has_permission() call that couldn't work for a grade-scoped
+-- sectional_head and didn't validate audience_ids against the caller's own
+-- scope at all). This copy must stay in sync with that one.
 create or replace function create_announcement(
   p_title text,
   p_body text,
@@ -114,10 +122,8 @@ set search_path = public
 as $$
 declare
   v_id uuid;
-  v_permission text;
 begin
-  v_permission := case p_audience when 'all_staff' then 'announcement.publish_all' else 'announcement.publish_section' end;
-  if not has_permission(current_staff_id(), v_permission) then
+  if not can_publish_to_audience(current_staff_id(), p_audience, p_audience_ids) then
     raise exception 'forbidden' using errcode = '42501';
   end if;
 

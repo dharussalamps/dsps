@@ -35,3 +35,13 @@ export async function fetchIsSchoolDayToday(): Promise<boolean> {
   if (error) throw error;
   return Boolean(data);
 }
+
+export type UncoveredClass = { classId: string; className: string; teacherId: string; teacherName: string; teacherStatus: string };
+
+/** Home "Needs attention": a class whose own teacher is absent/on leave today with no active cover assigned. */
+export async function fetchClassesNeedingCover(onDate: string): Promise<UncoveredClass[]> {
+  const { data, error } = await supabase.rpc('classes_needing_cover', { p_on_date: onDate });
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as { class_id: string; class_name: string; teacher_id: string; teacher_name: string; teacher_status: string }[];
+  return rows.map((r) => ({ classId: r.class_id, className: r.class_name, teacherId: r.teacher_id, teacherName: r.teacher_name, teacherStatus: r.teacher_status }));
+}

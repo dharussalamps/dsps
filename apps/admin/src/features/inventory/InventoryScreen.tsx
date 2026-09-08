@@ -21,6 +21,9 @@ export function InventoryScreen() {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
+  const [location, setLocation] = useState('');
+  const [condition, setCondition] = useState('');
+  const [code, setCode] = useState('');
   const [minQuantity, setMinQuantity] = useState('0');
   const [saving, setSaving] = useState(false);
 
@@ -28,10 +31,20 @@ export function InventoryScreen() {
     if (!name.trim() || !category.trim()) return;
     setSaving(true);
     try {
-      await createInventoryItem({ name: name.trim(), category: category.trim(), minQuantity: Number(minQuantity) || 0 });
+      await createInventoryItem({
+        name: name.trim(),
+        category: category.trim(),
+        location: location.trim() || undefined,
+        condition: condition.trim() || undefined,
+        code: code.trim() || undefined,
+        minQuantity: Number(minQuantity) || 0,
+      });
       setAdding(false);
       setName('');
       setCategory('');
+      setLocation('');
+      setCondition('');
+      setCode('');
       setMinQuantity('0');
       await queryClient.invalidateQueries({ queryKey: ['inventory', 'items'] });
     } finally {
@@ -49,6 +62,9 @@ export function InventoryScreen() {
           <Card>
             <TextField label="Name" value={name} onChangeText={setName} />
             <TextField label="Category" value={category} onChangeText={setCategory} />
+            <TextField label="Location (optional)" value={location} onChangeText={setLocation} />
+            <TextField label="Condition (optional)" value={condition} onChangeText={setCondition} placeholder="e.g. new, good, worn" />
+            <TextField label="Code (optional)" value={code} onChangeText={setCode} autoCapitalize="none" />
             <TextField label="Minimum quantity" value={minQuantity} onChangeText={setMinQuantity} keyboardType="numeric" />
             <Button label="Save" onPress={() => void submit()} loading={saving} />
           </Card>

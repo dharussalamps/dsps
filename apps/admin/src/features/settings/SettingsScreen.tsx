@@ -1,8 +1,10 @@
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
-import { useState } from 'react';
-import { Platform, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Platform, Text, View } from 'react-native';
 import { Button, Card, Screen, ScreenHeader, StatusPill } from '@/components';
+import { isBiometricAvailable, isBiometricUnlockEnabled, setBiometricUnlockEnabled } from '@/lib/biometrics';
+import { hasUnsyncedOperations } from '@/lib/offline';
 import { useAuthStore } from '@/store/authStore';
 import { semantic, typography } from '@/theme/tokens';
 import { registerDevice } from './api';
@@ -19,6 +21,57 @@ export function SettingsScreen() {
 
   const [notifStatus, setNotifStatus] = useState<'idle' | 'enabling' | 'enabled' | 'unavailable' | 'denied'>('idle');
   const [notifError, setNotifError] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricBusy, setBiometricBusy] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      setBiometricAvailable(await isBiometricAvailable());
+      setBiometricEnabled(await isBiometricUnlockEnabled());
+    })();
+  }, []);
+
+  async function toggleBiometric() {
+    setBiometricBusy(true);
+    try {
+      const next = !biometricEnabled;
+      await setBiometricUnlockEnabled(next);
+      setBiometricEnabled(next);
+    } finally {
+      setBiometricBusy(false);
+    }
+  }
+
+  // NFR-REL-02 vs NFR-SEC-06: sign-out wipes on-device cached data, which
+  // would silently discard attendance/marks a teacher marked offline and
+  // hasn't synced yet. Warn first, since that data can't be recovered once
+  // the local queue is cleared.
+  async function confirmSignOut() {
+    if (await hasUnsyncedOperations()) {
+      Alert.alert(
+        'Unsynced data on this device',
+        "You have attendance or other entries that haven't reached the server yet. Signing out now will lose them.",
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Sign out anyway', style: 'destructive', onPress: () => void doSignOut() },
+        ],
+      );
+      return;
+    }
+    await doSignOut();
+  }
+
+  async function doSignOut() {
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
+  }
 
   async function enableNotifications() {
     if (!staff) return;
@@ -68,12 +121,27 @@ export function SettingsScreen() {
         {notifError ? <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{notifError}</Text> : null}
       </Card>
 
+      {biometricAvailable ? (
+        <Card>
+          <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>SECURITY</Text>
+          <Button
+            label={biometricEnabled ? 'Biometric unlock enabled ✓' : 'Enable biometric unlock'}
+            variant={biometricEnabled ? 'outline' : 'primary'}
+            onPress={() => void toggleBiometric()}
+            loading={biometricBusy}
+          />
+          <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
+            When enabled, returning to the app after it has been backgrounded asks for Face ID/fingerprint instead of leaving you signed in unprotected.
+          </Text>
+        </Card>
+      ) : null}
+
       <Card>
         <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>LANGUAGE</Text>
         <Text style={{ ...typography.body, color: semantic.textPrimary }}>English</Text>
       </Card>
 
-      <Button label="Sign out" variant="danger" onPress={() => void signOut()} />
+      <Button label="Sign out" variant="danger" onPress={() => void confirmSignOut()} loading={signingOut} />
     </Screen>
   );
 }

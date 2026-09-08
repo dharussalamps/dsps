@@ -45,7 +45,7 @@ export function LeaveRequestDetailScreen() {
     setError(null);
     setBusy(true);
     try {
-      await approveLeave(d!.id, selectedCover, coverNotNeeded);
+      await approveLeave(d!.id, selectedCover, coverNotNeeded, remarks);
       await queryClient.invalidateQueries({ queryKey: ['leave'] });
       navigation.goBack();
     } catch (err: unknown) {
@@ -88,6 +88,20 @@ export function LeaveRequestDetailScreen() {
 
       {d.status === 'pending' ? (
         <>
+          <Card>
+            <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>IMPACT</Text>
+            <Text style={{ ...typography.body, color: semantic.textPrimary }}>
+              {d.balance
+                ? `${d.leaveTypeName}: ${d.balance.used} of ${d.balance.entitled} used, ${(d.balance.entitled - d.balance.used).toFixed(1)} remaining`
+                : `${d.leaveTypeName}: no balance on record for this year`}
+            </Text>
+            <Text style={{ ...typography.body, color: semantic.textSecondary }}>
+              {d.otherStaffOnLeave === 0
+                ? 'No other staff on leave for these dates'
+                : `${d.otherStaffOnLeave} other staff already on leave for these dates`}
+            </Text>
+          </Card>
+
           {d.requiresCover ? (
             <Card>
               <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>
@@ -121,11 +135,12 @@ export function LeaveRequestDetailScreen() {
 
           {error ? <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{error}</Text> : null}
 
-          <Button label="Approve" onPress={() => void approve()} loading={busy} />
-
           <Card>
-            <TextField label="Remarks (for rejection)" value={remarks} onChangeText={setRemarks} multiline />
-            <Button label="Reject" variant="danger" onPress={() => void reject()} loading={busy} />
+            <TextField label="Remarks (optional)" value={remarks} onChangeText={setRemarks} multiline />
+            <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+              <Button label="Approve" onPress={() => void approve()} loading={busy} style={{ flex: 1 }} />
+              <Button label="Reject" variant="danger" onPress={() => void reject()} loading={busy} style={{ flex: 1 }} />
+            </View>
           </Card>
         </>
       ) : null}

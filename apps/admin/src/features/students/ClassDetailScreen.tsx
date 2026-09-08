@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { ActivityIndicator, FlatList, View } from 'react-native';
 import { Button, EmptyState, Screen, ScreenHeader } from '@/components';
 import { todayIso, useExistingSubmission } from '@/features/attendance/hooks';
-import { useCurrentTerm, useSubjectsForClass } from '@/features/marks/hooks';
+import { useCurrentTerm, useSubjectsForTeacherInClass } from '@/features/marks/hooks';
 import type { RootStackParamList } from '@/navigation/types';
+import { useAuthStore } from '@/store/authStore';
 import { semantic, spacing } from '@/theme/tokens';
 import { StudentListItem } from './StudentListItem';
 import { useStudentsInClass } from './hooks';
@@ -21,8 +22,13 @@ export function ClassDetailScreen() {
   const onDate = todayIso();
   const submission = useExistingSubmission(classId, onDate);
 
+  const staff = useAuthStore((s) => s.staff);
   const [pickingSubject, setPickingSubject] = useState(false);
-  const subjects = useSubjectsForClass(classId);
+  // FR-MRK-01: scoped to this teacher's own class_subject_teachers
+  // assignment when one exists, so a class teacher can't enter marks for a
+  // subject they aren't assigned — falls back to the full grade list for a
+  // reviewer with no assignment row of their own (sectional head/principal).
+  const subjects = useSubjectsForTeacherInClass(classId, staff?.id);
   const currentTerm = useCurrentTerm();
 
   return (

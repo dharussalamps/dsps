@@ -1,14 +1,22 @@
 import { supabase } from '@/lib/supabase';
 
-export type AccountRow = { id: string; staffNo: string; fullName: string; status: 'active' | 'inactive' | 'left'; hasLogin: boolean; roles: string[] };
+export type RoleAssignment = { staffRoleId: string; roleName: string; scopeType: 'school' | 'grade' | 'class' | 'self'; scopeId: string | null };
+export type AccountRow = { id: string; staffNo: string; fullName: string; status: 'active' | 'inactive' | 'left'; hasLogin: boolean; roles: RoleAssignment[] };
 
 export async function listAccounts(): Promise<AccountRow[]> {
   const { data, error } = await supabase
     .from('staff')
-    .select('id, staff_no, full_name, status, auth_user_id, staff_roles(role_id, revoked_at, roles(name))')
+    .select('id, staff_no, full_name, status, auth_user_id, staff_roles(id, revoked_at, scope_type, scope_id, roles(name))')
     .order('full_name')
     .returns<
-      { id: string; staff_no: string; full_name: string; status: string; auth_user_id: string | null; staff_roles: { role_id: string; revoked_at: string | null; roles: { name: string } | null }[] }[]
+      {
+        id: string;
+        staff_no: string;
+        full_name: string;
+        status: string;
+        auth_user_id: string | null;
+        staff_roles: { id: string; revoked_at: string | null; scope_type: string; scope_id: string | null; roles: { name: string } | null }[];
+      }[]
     >();
   if (error) throw error;
   return (data ?? []).map((r) => ({
@@ -17,7 +25,9 @@ export async function listAccounts(): Promise<AccountRow[]> {
     fullName: r.full_name,
     status: r.status as AccountRow['status'],
     hasLogin: r.auth_user_id != null,
-    roles: r.staff_roles.filter((sr) => sr.revoked_at == null).map((sr) => sr.roles?.name ?? '').filter(Boolean),
+    roles: r.staff_roles
+      .filter((sr) => sr.revoked_at == null)
+      .map((sr) => ({ staffRoleId: sr.id, roleName: sr.roles?.name ?? '', scopeType: sr.scope_type as RoleAssignment['scopeType'], scopeId: sr.scope_id })),
   }));
 }
 
@@ -62,13 +72,26 @@ export async function revokeRole(staffRoleId: string): Promise<void> {
 
 export type AuditEntry = { id: number; actorName: string | null; action: string; entity: string; entityId: string | null; createdAt: string; reason: string | null };
 
-export async function listAuditLog(): Promise<AuditEntry[]> {
-  const { data, error } = await supabase
+/** FR-ADM-05: "the principal may search the audit log by actor, entity, or date range." All filters optional and combine with AND. */
+export async function listAuditLog(filters: { actorId?: string; entity?: string; fromDate?: string; toDate?: string } = {}): Promise<AuditEntry[]> {
+  let request = supabase
     .from('audit_log')
     .select('id, action, entity, entity_id, created_at, reason, staff(full_name)')
     .order('created_at', { ascending: false })
-    .limit(100)
-    .returns<{ id: number; action: string; entity: string; entity_id: string | null; created_at: string; reason: string | null; staff: { full_name: string } | null }[]>();
+    .limit(200);
+  if (filters.actorId) request = request.eq('actor_id', filters.actorId);
+  if (filters.entity) request = request.eq('entity', filters.entity);
+  if (filters.fromDate) request = request.gte('created_at', filters.fromDate);
+  if (filters.toDate) request = request.lte('created_at', filters.toDate);
+
+  const { data, error } = await request.returns<{ id: number; action: string; entity: string; entity_id: string | null; created_at: string; reason: string | null; staff: { full_name: string } | null }[]>();
   if (error) throw error;
   return (data ?? []).map((r) => ({ id: r.id, actorName: r.staff?.full_name ?? null, action: r.action, entity: r.entity, entityId: r.entity_id, createdAt: r.created_at, reason: r.reason }));
+}
+
+/** Entity names actually present in the log, for a filter picker — cheaper than a hardcoded list that drifts from what audit_row_change() actually writes. */
+export async function listAuditEntities(): Promise<string[]> {
+  const { data, error } = await supabase.from('audit_log').select('entity').limit(1000);
+  if (error) throw error;
+  return Array.from(new Set((data ?? []).map((r) => r.entity))).sort();
 }

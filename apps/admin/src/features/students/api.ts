@@ -56,6 +56,8 @@ export async function searchStudents(query: string): Promise<StudentSummary[]> {
     .from('students')
     .select('id, admission_no, full_name, preferred_name, photo_path, status')
     .or(`admission_no.ilike.%${term}%,full_name.ilike.%${term}%`)
+    // FR-STU-12: a student marked 'left' is excluded from rosters and counts.
+    .neq('status', 'left')
     .order('full_name')
     .limit(30)
     .returns<StudentRow[]>();
@@ -84,8 +86,10 @@ export async function listClasses(): Promise<ClassSummary[]> {
 export async function listStudentsInClass(classId: string): Promise<(StudentSummary & { rollNo: string | null })[]> {
   const { data, error } = await supabase
     .from('student_enrolments')
-    .select('roll_no, students(id, admission_no, full_name, preferred_name, photo_path, status)')
+    .select('roll_no, students!inner(id, admission_no, full_name, preferred_name, photo_path, status)')
     .eq('class_id', classId)
+    // FR-STU-12: excluded from rosters and counts once marked 'left'.
+    .neq('students.status', 'left')
     .order('roll_no')
     .returns<{ roll_no: string | null; students: StudentRow | null }[]>();
 
@@ -123,6 +127,23 @@ export async function getStudentProfile(studentId: string): Promise<StudentProfi
     className: enrolment?.classes?.name ?? null,
     rollNo: enrolment?.roll_no ?? null,
   };
+}
+
+/** FR-STU-08: "after a call placed from the app, the user is prompted to record its purpose in one line, retained against the student." */
+export async function logCall(input: { studentId: string; guardianId?: string; purpose: string; callerId: string }): Promise<void> {
+  const { error } = await supabase.from('call_logs').insert({
+    student_id: input.studentId,
+    guardian_id: input.guardianId || null,
+    caller_id: input.callerId,
+    purpose: input.purpose || null,
+  });
+  if (error) throw error;
+}
+
+/** FR-STU-12: marks a student left (or reactivates one), retaining all their records. */
+export async function setStudentStatus(studentId: string, status: 'active' | 'inactive' | 'left', reason?: string): Promise<void> {
+  const { error } = await supabase.rpc('set_student_status', { p_student_id: studentId, p_status: status, p_reason: reason || null });
+  if (error) throw error;
 }
 
 /** Returns [] when the caller lacks student.view_guardian_contact — RLS on
@@ -190,12 +211,13 @@ export async function fetchMemberships(studentId: string): Promise<Membership[]>
   return (data ?? []).map((r) => ({ id: r.id, groupName: r.group_name, position: r.position, startedOn: r.started_on, endedOn: r.ended_on }));
 }
 
-export async function addMembership(input: { studentId: string; groupName: string; position?: string; startedOn?: string }): Promise<void> {
+export async function addMembership(input: { studentId: string; groupName: string; position?: string; startedOn?: string; endedOn?: string }): Promise<void> {
   const { error } = await supabase.from('memberships').insert({
     student_id: input.studentId,
     group_name: input.groupName,
     position: input.position || null,
     started_on: input.startedOn || null,
+    ended_on: input.endedOn || null,
   });
   if (error) throw error;
 }
@@ -208,6 +230,17 @@ export async function fetchBenefits(studentId: string): Promise<Benefit[]> {
     .eq('student_id', studentId);
   if (error) throw error;
   return (data ?? []).map((r) => ({ id: r.id, scheme: r.scheme, status: r.status as Benefit['status'], issuedOn: r.issued_on, notes: r.notes }));
+}
+
+/** FR-ACH-04: "a benefit may be recorded against a student with scheme, period, and a status of issued, pending or active." */
+export async function addBenefit(input: { studentId: string; scheme: string; academicYearId?: string | null; status?: 'pending' | 'issued' | 'active' }): Promise<void> {
+  const { error } = await supabase.from('benefits').insert({
+    student_id: input.studentId,
+    scheme: input.scheme,
+    academic_year_id: input.academicYearId || null,
+    status: input.status ?? 'pending',
+  });
+  if (error) throw error;
 }
 
 export async function markBenefitIssued(benefitId: string, staffId: string): Promise<void> {

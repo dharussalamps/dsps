@@ -79,6 +79,32 @@ export async function assignResponsibility(input: { staffId: string; title: stri
   if (error) throw error;
 }
 
+export type StaffAttendanceSummary = { presentDays: number; lateDays: number; absentDays: number; leaveDays: number; totalDays: number };
+
+/** FR-STF-05: "a staff profile shows attendance summary." RLS (can_view_staff_attendance) governs who this returns anything for. */
+export async function fetchStaffAttendanceSummary(staffId: string, sinceDate: string): Promise<StaffAttendanceSummary> {
+  const { data, error } = await supabase.from('staff_attendance').select('status').eq('staff_id', staffId).gte('on_date', sinceDate);
+  if (error) throw error;
+  const rows = data ?? [];
+  const count = (status: string) => rows.filter((r) => r.status === status).length;
+  return {
+    presentDays: count('present'),
+    lateDays: count('late'),
+    absentDays: count('absent'),
+    leaveDays: count('on_leave'),
+    totalDays: rows.length,
+  };
+}
+
+/** FR-STF-03: "the directory indicates each colleague's presence for the current day." */
+export async function fetchTodayPresence(onDate: string): Promise<Record<string, string>> {
+  const { data, error } = await supabase.from('staff_attendance').select('staff_id, status').eq('on_date', onDate);
+  if (error) throw error;
+  const result: Record<string, string> = {};
+  for (const row of data ?? []) result[row.staff_id] = row.status;
+  return result;
+}
+
 function toStaffSummary(row: {
   id: string;
   staff_no: string;
