@@ -32,22 +32,7 @@ enabled = true
 [functions.submit-attendance]
 verify_jwt = true
 
-[functions.approve-leave]
-verify_jwt = true
-
-[functions.assign-cover]
-verify_jwt = true
-
-[functions.publish-announcement]
-verify_jwt = true
-
-[functions.declare-closure]
-verify_jwt = true
-
 [functions.import-records]
-verify_jwt = true
-
-[functions.log-call]
 verify_jwt = true
 
 [functions.export-report]

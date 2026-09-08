@@ -122,7 +122,7 @@ insert into students (admission_no, full_name, status) values
 on conflict (admission_no) do nothing;
 
 insert into student_enrolments (student_id, class_id, academic_year_id, roll_no)
-select s.id, c.class_id, (select id from academic_years where label = '2026'), c.roll_no
+select s.id, c.class_id, (select id from academic_years where label = '2026'), x.roll_no
 from (values
   ('ADM2026-0001', '1A', '1'), ('ADM2026-0002', '1A', '2'), ('ADM2026-0003', '1A', '3'),
   ('ADM2026-0004', '1A', '4'), ('ADM2026-0005', '1A', '5'), ('ADM2026-0006', '1A', '6'),

@@ -11,8 +11,9 @@ language sql stable as $$
            then true                                   -- half_day and exam count
       when not exists (select 1 from terms
                        where p_date between starts_on and ends_on) then false
-      when extract(isodow from p_date)::smallint
-           <> all ((select working_weekdays from school_settings)) then false
+      when not exists (select 1 from school_settings
+                       where extract(isodow from p_date)::smallint
+                             = any (working_weekdays)) then false
       else true
     end;
 $$;
