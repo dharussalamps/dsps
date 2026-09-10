@@ -6,6 +6,7 @@ import { Text, View } from 'react-native';
 import { Button, Card, Hero, Screen, ScreenHeader, TextField } from '@/components';
 import { useClasses } from '@/features/students/hooks';
 import { supabase } from '@/lib/supabase';
+import { parseDMY } from '@/lib/date';
 import type { RootStackParamList } from '@/navigation/types';
 import { spacing, typography, semantic } from '@/theme/tokens';
 import { composeAnnouncement, type AudienceType } from './api';
@@ -68,7 +69,12 @@ export function ComposeAnnouncementScreen() {
     }
     let publishAt: string | undefined;
     if (scheduling && publishDate.trim()) {
-      const parsed = new Date(`${publishDate.trim()}T${publishTime.trim() || '00:00'}:00`);
+      const isoPublishDate = parseDMY(publishDate);
+      if (!isoPublishDate) {
+        setError('Enter the scheduled date as DD/MM/YYYY.');
+        return;
+      }
+      const parsed = new Date(`${isoPublishDate}T${publishTime.trim() || '00:00'}:00`);
       if (Number.isNaN(parsed.getTime())) {
         setError('Check the scheduled date and time.');
         return;
@@ -160,7 +166,7 @@ export function ComposeAnnouncementScreen() {
         {scheduling ? (
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <View style={{ flex: 1 }}>
-              <TextField label="Date" placeholder="YYYY-MM-DD" value={publishDate} onChangeText={setPublishDate} />
+              <TextField label="Date" placeholder="DD/MM/YYYY" value={publishDate} onChangeText={setPublishDate} />
             </View>
             <View style={{ flex: 1 }}>
               <TextField label="Time (HH:MM)" placeholder="08:00" value={publishTime} onChangeText={setPublishTime} />

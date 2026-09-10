@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
-import { Button, Card, StatusPill, TextField } from '@/components';
+import { Button, Card, SectionHeader, StatusPill, TextField } from '@/components';
 import { useAuthStore } from '@/store/authStore';
 import { spacing, typography, semantic } from '@/theme/tokens';
 import { addBenefit, markBenefitIssued } from './api';
@@ -65,7 +65,7 @@ export function BenefitsSection({ studentId }: { studentId: string }) {
 
   return (
     <Card>
-      <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>BENEFITS</Text>
+      <SectionHeader icon="gift-outline" label="BENEFITS" />
       {benefits.data.length === 0 && !adding ? (
         <Text style={{ ...typography.caption, color: semantic.textSecondary, paddingVertical: spacing.xs }}>No benefits on record.</Text>
       ) : null}

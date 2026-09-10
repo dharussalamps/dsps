@@ -660,6 +660,15 @@ account.manage             audit.view
 | `administrator` | `student.view_full`, `student.edit`, `student.view_benefits`, `student.view_guardian_contact`; `staff.manage`, `staff.view_full`; `inventory.manage`, `inventory.view`; `event.manage`, `diary.manage`; `account.manage`; `attendance.amend_locked`, `attendance.view_board`, `attendance.mark_staff`; `leave.request` | `school` |
 | `staff` | `staff.view_directory`, `leave.request` | `self` |
 
+Business rule, not in the table above: **creating** a student record —
+one-at-a-time (`AddStudentScreen`) or via CSV (`ImportStudentsSection`),
+both routed through `import_students()` — is restricted to `principal` and
+`administrator` specifically, narrower than `student.edit` itself (which
+`vice_principal` also holds, for **editing** an existing student — that is
+unchanged). Enforced as a role check (`current_staff_has_role`) rather than
+a new permission key, since role_permissions is a fixed per-role seed, not
+something `account.manage` lets an admin customize.
+
 ### 5.3 Scope resolution
 
 A user may act on a record if **any** of their unrevoked `staff_roles` rows grants the permission at a scope containing the record.
@@ -759,19 +768,42 @@ $$;
 
 ### 6.2 Attendance editability
 
+Only *today* carries a time-based edit buffer. Any other date is locked
+outright and can only be opened by a principal's explicit reopen
+(`attendance.reopen_class` → `reopen_class_attendance_day`), and that reopen
+is one-shot: the moment a whole-class resubmit
+(`amend_student_attendance_bulk`) succeeds for a non-today date, it consumes
+the reopen and the date locks itself back — no separate close step needed.
+Reopening *today* specifically (after its own buffer has closed) just grants
+the same buffer again from the reopen's timestamp, since today is never
+meant to be one-shot.
+
 ```sql
 create or replace function attendance_is_editable(p_class uuid, p_date date)
 returns boolean language sql stable as $$
-  select coalesce(
-    (select now() < s.submitted_at
-       + make_interval(mins => (select attendance_edit_minutes from school_settings))
-     from attendance_submissions s
-     where s.class_id = p_class and s.on_date = p_date),
-    true)  -- not yet submitted, therefore editable
+  select case
+    when p_date = current_date then
+      coalesce(
+        (select now() < s.submitted_at
+           + make_interval(mins => (select attendance_edit_minutes from school_settings))
+         from attendance_submissions s
+         where s.class_id = p_class and s.on_date = p_date),
+        true) -- not yet submitted today, therefore editable
+      or exists (
+        select 1 from student_attendance_reopens r
+        where r.class_id = p_class and r.on_date = p_date
+          and now() < r.reopened_at + make_interval(mins => (select attendance_edit_minutes from school_settings))
+      )
+    else
+      exists (
+        select 1 from student_attendance_reopens r
+        where r.class_id = p_class and r.on_date = p_date
+      )
+  end
 $$;
 ```
 
-After the window, writes require `attendance.amend_locked` and a non-null `reason`, and always produce an `audit_log` row.
+After today's window, writes require `attendance.amend_locked` and a non-null `reason`, and always produce an `audit_log` row. A past date has no such fallback — it's `attendance.reopen_class` (principal only) or nothing.
 
 ### 6.3 Consecutive absences
 
@@ -891,7 +923,7 @@ Screens are listed with their route name, the data they read, the permission tha
 | `AttendanceSubmitted` | `attendance.mark` | absentee list with consecutive counts and guardians | Call, log call, record early leave |
 | `EarlyLeave` | `attendance.early_leave` | roster | Record departure |
 | `AttendanceBoard` | `attendance.view_board` | `v_class_marking_status`, staff board | Open class, remind unmarked, switch student/staff tab, mark staff attendance (if `attendance.mark_staff`) |
-| `MarkStaffAttendance` | `attendance.view_board` to open, `attendance.mark_staff` to submit | staff board, defaulted present, date picker (capped at today) | Toggle status per staff member, submit all at once, step/pick the date. Today is always editable; a past date is locked for everyone — principal included — until it's reopened (`attendance.reopen_staff`, principal only, gates the reopen action itself, not a write bypass). |
+| `MarkStaffAttendance` | `attendance.view_board` to open, `attendance.mark_staff` to submit | staff board, defaulted present, date picker (capped at today) | Toggle status per staff member, submit all at once, step/pick the date. A date locks for everyone — principal included — once it's a past date, or once today has been submitted; locked stays locked until it's reopened (`attendance.reopen_staff`, principal only, gates the reopen action itself, not a write bypass). |
 | `MarkEntry` | `marks.enter` | mark sheet, roster | Save draft, submit and lock |
 | `MarksReview` | `marks.review` | class and subject comparison, outstanding sheets | Open sheet, reopen (principal) |
 | `StaffDirectory` | `staff.view_directory` | staff with presence, duty roster summary | Call, filter, open profile |
@@ -1036,7 +1068,7 @@ Where a decision is unresolved, build the default and make it configurable.
 
 | # | Question | Default to build |
 |---|---|---|
-| 1 | How staff attendance is captured | Self check-in exists (`check_in_self`, kept generic per this row's original default) but is hidden in the client for now — staff aren't yet familiar with the app. Interim default: admin/principal mark the whole staff board at once (`attendance.mark_staff`, `MarkStaffAttendance`), with the marked date pickable but capped at today. A past date is locked for everyone, principal included, until it's reopened (`attendance.reopen_staff`, principal only, `reopen_staff_attendance_day()` — gates *creating* the `staff_attendance_reopens` row, not writing directly). Today itself never needs reopening. Revisit showing self check-in once staff are onboarded. |
+| 1 | How staff attendance is captured | Self check-in exists (`check_in_self`, kept generic per this row's original default) but is hidden in the client for now — staff aren't yet familiar with the app. Interim default: admin/principal mark the whole staff board at once (`attendance.mark_staff`, `MarkStaffAttendance`), with the marked date pickable but capped at today. A date is locked for everyone, principal included, once it's a past date or today has already been submitted, until it's reopened (`attendance.reopen_staff`, principal only, `reopen_staff_attendance_day()` — gates *creating* the `staff_attendance_reopens` row, not writing directly). Revisit showing self check-in once staff are onboarded. |
 | 2 | Who approves leave | Principal approves all. Store `approver_role` on `leave_types` so section-level approval can be enabled later. |
 | 3 | Sectional head sight of leave balances | Granted for own section (`leave.view_balances` at grade scope). |
 | 4 | Who edits the academic calendar | Principal only. `calendar.manage` is not granted to `administrator`. |
@@ -1076,7 +1108,7 @@ claimed as verified.
 | 10 | Attendance board, class drill-down, remind unmarked | done | `v_class_marking_status(on_date)` (§6.4, implemented as a set-returning function — Postgres views can't take parameters) — unmarked classes sort first, matching FR-ATT-10. `AttendanceBoardScreen` + a `remind_unmarked_class()` RPC for the per-class manual remind action (distinct from the scheduled digest in task 11). `ClassDetailScreen` now offers "Mark attendance" or "View today's attendance" depending on submission state. |
 | 11 | Scheduled jobs: reminder, escalation, lock, risk detection | done | All four jobs from §7, every one gated on `is_school_day(current_date)` first. `devices`/`notifications` (§4.10) pulled forward since these jobs need somewhere to write to. pg_cron can't follow a *column's* value (`school_settings.attendance_due_at`), so the reminder/escalation/risk jobs run every 5 minutes and self-gate on a time-of-day window instead — see the migration's own comment. pgTAP test proves zero output on a holiday (§11's stated acceptance test) for all four jobs. **Not run** — no pg_cron/live Postgres here, and push dispatch to Expo's push service (turning a `notifications` row into an actual device notification) isn't built: these jobs write rows to the in-app notification center, which is as far as this environment lets me verify anything real (no device push tokens to send to anyway). |
 | 12 | Early leave, staff check-in, staff attendance board | not started | |
-| 12 | Early leave, staff check-in, staff attendance board | done | `early_leaves`/`staff_attendance` (§4.5) + RLS. `EarlyLeaveScreen` (reachable from `AttendanceSubmitted`), self check-in via a `check_in_self()` RPC (server decides present-vs-late from `school_settings.staff_late_after`, not a client-reported status), and a student/staff tab switch added to `AttendanceBoardScreen` per section 10's "switch student/staff tab" action. `mark_staff_absent` job written but lands in the next migration (needs `leave_requests` to check "no approved leave"). **2026-09-09 revision:** self check-in's Home card is now hidden — staff aren't yet familiar with the app — and a second, privileged write path (`attendance.mark_staff`, `mark_staff_attendance_bulk()`, `MarkStaffAttendanceScreen`) lets admin/principal mark everyone at once instead, with a date picker + prev/next steppers and a school-day/already-marked indicator; see section 15 open decision #1. A further revision locks that screen's date: today is always editable, but a past date needs a `staff_attendance_reopens` row before *anyone* — principal included — can write to it; `attendance.reopen_staff` (principal only) gates creating that row via `reopen_staff_attendance_day()`, not a direct write bypass, mirroring `marks.reopen`'s shape but stricter (no "the reopener doesn't need reopening" exception). |
+| 12 | Early leave, staff check-in, staff attendance board | done | `early_leaves`/`staff_attendance` (§4.5) + RLS. `EarlyLeaveScreen` (reachable from `AttendanceSubmitted`), self check-in via a `check_in_self()` RPC (server decides present-vs-late from `school_settings.staff_late_after`, not a client-reported status), and a student/staff tab switch added to `AttendanceBoardScreen` per section 10's "switch student/staff tab" action. `mark_staff_absent` job written but lands in the next migration (needs `leave_requests` to check "no approved leave"). **2026-09-09 revision:** self check-in's Home card is now hidden — staff aren't yet familiar with the app — and a second, privileged write path (`attendance.mark_staff`, `mark_staff_attendance_bulk()`, `MarkStaffAttendanceScreen`) lets admin/principal mark everyone at once instead, with a date picker + prev/next steppers and a school-day/already-marked indicator; see section 15 open decision #1. A further revision locks that screen's date: a past date needs a `staff_attendance_reopens` row before *anyone* — principal included — can write to it; `attendance.reopen_staff` (principal only) gates creating that row via `reopen_staff_attendance_day()`, not a direct write bypass, mirroring `marks.reopen`'s shape but stricter (no "the reopener doesn't need reopening" exception). **2026-09-10 revision:** today now locks the same way once it's been submitted once — a `staff_attendance_submissions` row (one per date, written by `mark_staff_attendance_bulk()` on success via a small `record_staff_attendance_submission()` definer helper) tracks that; `reopen_staff_attendance_day()`/`close_staff_attendance_day()` can now target today too, not just a past date. |
 | 13 | Leave: request, balances, approval, cover assignment | done | `leave_balances`/`leave_requests` (§4.6). `approve_leave()`/`reject_leave()` (SECURITY DEFINER, since they touch balances/cover/notifications with no general client write policy) implement the cover-required rule and the balance debit atomically; `assign_cover()` for cover assigned outside a leave request. A `can_view_staff_leave()` helper resolves section 15 open decision #3 ("sectional head sees own section's balances") — see the migration comment for why this couldn't just be `has_permission(..., 'grade')` the way everything else is. `MyLeaveScreen`/`LeaveRequestsScreen`/`LeaveRequestDetailScreen` built (plain YYYY-MM-DD text fields for dates — no date-picker library is installed). pgTAP test proves the cover-required block and the acknowledged-override path (§11's stated acceptance test). `mark_staff_absent` job now complete alongside these tables. |
 | 14 | Marks: sheets, entry, lock, reopen, averages, trends | done | `mark_sheets`/`marks` (§4.7) + RLS (`write_marks` only allows writes while `status = 'draft'`, satisfying FR-MRK-03 by construction). `submit_mark_sheet()`/`reopen_mark_sheet()` (SECURITY DEFINER, `marks.enter`/`marks.reopen` respectively) and `class_subject_average()` for FR-MRK-05. `MarkEntryScreen` (reachable from `ClassDetail` via a subject picker over `grade_subjects` — there's no dedicated subject-teacher-assignment UI yet, so this doesn't limit to `class_subject_teachers`), `MarksReviewScreen` (visible sheets, reopen for principal), and a marks section added to `StudentProfileScreen` (score beside class average, per FR-MRK-05). No **trends** (term-over-term) yet — that needs `attendance_summaries`-style aggregation, deferred to task 20 (analytics) where the same aggregation machinery is being built anyway. pgTAP test proves a submitted sheet resists edits and that only `marks.reopen` (not `marks.enter`) can reopen it. |
 | 15 | Achievements, memberships, benefits, student timeline | done | `achievements`/`memberships`/`benefits` (§4.8) + RLS — benefits kept on its own `student.view_benefits` permission per §5.4, independent of `student.view_full`. `ActivitySection`/`BenefitsSection` added to `StudentProfileScreen` (add achievement/membership, mark a benefit collected) — folded into the one profile screen rather than separate tab screens, same pattern as marks/guardians. No separate "student timeline" merging attendance+marks+activity+calls into one chronological feed — section 10 doesn't name it as its own screen, and the profile screen's sections already surface all of it, just not interleaved by date. |

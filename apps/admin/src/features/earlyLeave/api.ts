@@ -1,11 +1,13 @@
 import { supabase } from '@/lib/supabase';
 
+/** recordedBy must be the current staff member's staff.id (not their auth user id) — RLS's write_early_leaves policy checks recorded_by = current_staff_id(). */
 export async function recordEarlyLeave(input: {
   studentId: string;
   onDate: string;
   leftAt: string; // HH:MM
   reason?: string;
   collectedBy?: string;
+  recordedBy: string;
 }): Promise<void> {
   const { error } = await supabase.from('early_leaves').insert({
     student_id: input.studentId,
@@ -13,6 +15,7 @@ export async function recordEarlyLeave(input: {
     left_at: input.leftAt,
     reason: input.reason || null,
     collected_by: input.collectedBy || null,
+    recorded_by: input.recordedBy,
   });
   if (error) throw error;
 }

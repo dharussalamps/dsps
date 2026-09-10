@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
 import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, TextField } from '@/components';
 import { listStaff, type StaffSummary } from '@/features/staff/api';
+import { parseDMY } from '@/lib/date';
 import { semantic, spacing, typography } from '@/theme/tokens';
 import { useAuditEntities, useAuditLog } from './hooks';
 
@@ -18,11 +19,13 @@ export function AuditLogScreen() {
   const [showFilters, setShowFilters] = useState(false);
 
   const entities = useAuditEntities();
+  const isoFromDate = parseDMY(fromDate);
+  const isoToDate = parseDMY(toDate);
   const audit = useAuditLog({
     entity: entity ?? undefined,
     actorId: actor?.id,
-    fromDate: fromDate.trim() ? `${fromDate.trim()}T00:00:00` : undefined,
-    toDate: toDate.trim() ? `${toDate.trim()}T23:59:59` : undefined,
+    fromDate: isoFromDate ? `${isoFromDate}T00:00:00` : undefined,
+    toDate: isoToDate ? `${isoToDate}T23:59:59` : undefined,
   });
 
   async function searchActor(q: string) {
@@ -68,10 +71,10 @@ export function AuditLogScreen() {
             ) : null}
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <View style={{ flex: 1 }}>
-                <TextField label="From" placeholder="YYYY-MM-DD" value={fromDate} onChangeText={setFromDate} />
+                <TextField label="From" placeholder="DD/MM/YYYY" value={fromDate} onChangeText={setFromDate} />
               </View>
               <View style={{ flex: 1 }}>
-                <TextField label="To" placeholder="YYYY-MM-DD" value={toDate} onChangeText={setToDate} />
+                <TextField label="To" placeholder="DD/MM/YYYY" value={toDate} onChangeText={setToDate} />
               </View>
             </View>
             {hasFilters ? <Button label="Clear filters" size="sm" variant="ghost" onPress={clearFilters} /> : null}

@@ -128,11 +128,99 @@ export async function checkInSelf(): Promise<void> {
   if (error) throw error;
 }
 
+/** For MarkAttendanceScreen's header subtitle — the class name isn't in its route params, only classId. */
+export async function fetchClassName(classId: string): Promise<string | null> {
+  const { data, error } = await supabase.from('classes').select('name').eq('id', classId).maybeSingle();
+  if (error) throw error;
+  return data?.name ?? null;
+}
+
 /** Same is_school_day() RPC as Home's "today" check (features/home/api.ts), but for any date — MarkStaffAttendance needs it for whichever date is selected, not just today. */
 export async function fetchIsSchoolDay(onDate: string): Promise<boolean> {
   const { data, error } = await supabase.rpc('is_school_day', { p_date: onDate });
   if (error) throw error;
   return Boolean(data);
+}
+
+/**
+ * Whether MarkAttendanceScreen can currently write to this class/date
+ * (20260910040000_student_attendance_reopen.sql's attendance_is_editable):
+ * true for today within its edit window, or any date carrying a
+ * student_attendance_reopens row; false for a past date that hasn't been
+ * reopened, or today past its window with no reopen. A principal-only
+ * reopen (see reopenClassAttendanceDay) is what lifts either case — the
+ * older attendance.amend_locked+reason path (amendStudentAttendance) still
+ * exists separately for one-off corrections outside this screen.
+ */
+export async function fetchAttendanceEditable(classId: string, onDate: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('attendance_is_editable', { p_class: classId, p_date: onDate });
+  if (error) throw error;
+  return Boolean(data);
+}
+
+/** Per-student status already recorded for this class/date, keyed by student_id — empty for a date nothing's been submitted for yet. Lets MarkAttendanceScreen seed its toggles from reality when navigating to an existing date instead of always defaulting to present. */
+export async function fetchStudentAttendanceForDate(
+  classId: string,
+  onDate: string,
+): Promise<Record<string, { status: 'present' | 'absent' | 'late'; reason: string | null }>> {
+  const { data, error } = await supabase
+    .from('student_attendance')
+    .select('student_id, status, reason')
+    .eq('class_id', classId)
+    .eq('on_date', onDate)
+    .returns<{ student_id: string; status: 'present' | 'absent' | 'late'; reason: string | null }[]>();
+  if (error) throw error;
+  const result: Record<string, { status: 'present' | 'absent' | 'late'; reason: string | null }> = {};
+  for (const row of data ?? []) result[row.student_id] = { status: row.status, reason: row.reason };
+  return result;
+}
+
+export type ClassAttendanceReopen = { reopenedByName: string; reopenedAt: string };
+
+/** Whether a locked class/date has been unlocked — null means still locked to attendance.reopen_class holders (principal) only. */
+export async function fetchClassAttendanceReopen(classId: string, onDate: string): Promise<ClassAttendanceReopen | null> {
+  const { data, error } = await supabase
+    .from('student_attendance_reopens')
+    .select('reopened_at, staff(full_name)')
+    .eq('class_id', classId)
+    .eq('on_date', onDate)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as unknown as { reopened_at: string; staff: { full_name: string } | null } | null;
+  return row ? { reopenedByName: row.staff?.full_name ?? 'Unknown', reopenedAt: row.reopened_at } : null;
+}
+
+/** attendance.reopen_class (principal only) — unlocks a locked class/date (past, or today once its edit window has closed) so attendance.mark holders without that permission can edit it too. */
+export async function reopenClassAttendanceDay(classId: string, onDate: string): Promise<void> {
+  const { error } = await supabase.rpc('reopen_class_attendance_day', { p_class_id: classId, p_on_date: onDate });
+  if (error) throw error;
+}
+
+/** attendance.reopen_class (principal only) — locks a previously-reopened class/date back up. */
+export async function closeClassAttendanceDay(classId: string, onDate: string): Promise<void> {
+  const { error } = await supabase.rpc('close_class_attendance_day', { p_class_id: classId, p_on_date: onDate });
+  if (error) throw error;
+}
+
+/**
+ * Editing a class/date that's already been submitted (reopened, or today
+ * still within its edit window) — submitAttendanceOnline()'s submit_attendance
+ * RPC is create-only and always rejects a second submit for the same
+ * (class_id, on_date) with 'already_submitted', so this is the separate,
+ * always-online path MarkAttendanceScreen calls instead once it detects an
+ * existing submission (never queued offline, unlike a fresh submit).
+ */
+export async function amendStudentAttendanceBulk(
+  classId: string,
+  onDate: string,
+  entries: { studentId: string; status: 'present' | 'absent' | 'late'; reason?: string | null }[],
+): Promise<void> {
+  const { error } = await supabase.rpc('amend_student_attendance_bulk', {
+    p_class_id: classId,
+    p_on_date: onDate,
+    p_entries: entries.map((e) => ({ student_id: e.studentId, status: e.status, reason: e.reason ?? null })),
+  });
+  if (error) throw error;
 }
 
 /** section 15 open decision #1: admin/principal bulk-mark the whole staff board in one call, via attendance.mark_staff. */
@@ -147,9 +235,16 @@ export async function markStaffAttendanceBulk(
   if (error) throw error;
 }
 
+/** Whether today's staff attendance has already been bulk-submitted — once true, today locks the same as a past date, until a staff_attendance_reopens row exists for it. Doesn't apply to past dates, which are always locked regardless of this. */
+export async function fetchStaffAttendanceSubmitted(onDate: string): Promise<boolean> {
+  const { data, error } = await supabase.from('staff_attendance_submissions').select('on_date').eq('on_date', onDate).maybeSingle();
+  if (error) throw error;
+  return data != null;
+}
+
 export type StaffAttendanceReopen = { reopenedByName: string; reopenedAt: string };
 
-/** Whether a past date's staff attendance has been unlocked — null means still locked to attendance.reopen_staff holders (principal) only. */
+/** Whether a locked date's staff attendance has been unlocked (past date, or today after it's been submitted) — null means still locked to attendance.reopen_staff holders (principal) only. */
 export async function fetchStaffAttendanceReopen(onDate: string): Promise<StaffAttendanceReopen | null> {
   const { data, error } = await supabase.from('staff_attendance_reopens').select('reopened_at, staff(full_name)').eq('on_date', onDate).maybeSingle();
   if (error) throw error;
@@ -157,13 +252,13 @@ export async function fetchStaffAttendanceReopen(onDate: string): Promise<StaffA
   return row ? { reopenedByName: row.staff?.full_name ?? 'Unknown', reopenedAt: row.reopened_at } : null;
 }
 
-/** attendance.reopen_staff (principal only) — unlocks a past date so attendance.mark_staff holders without that permission can edit it too. */
+/** attendance.reopen_staff (principal only) — unlocks a locked date (past, or today once submitted) so attendance.mark_staff holders without that permission can edit it too. */
 export async function reopenStaffAttendanceDay(onDate: string): Promise<void> {
   const { error } = await supabase.rpc('reopen_staff_attendance_day', { p_on_date: onDate });
   if (error) throw error;
 }
 
-/** attendance.reopen_staff (principal only) — locks a previously-reopened past date back up. */
+/** attendance.reopen_staff (principal only) — locks a previously-reopened date back up. */
 export async function closeStaffAttendanceDay(onDate: string): Promise<void> {
   const { error } = await supabase.rpc('close_staff_attendance_day', { p_on_date: onDate });
   if (error) throw error;
@@ -318,4 +413,69 @@ export async function amendStudentAttendance(
 ): Promise<void> {
   const { error } = await supabase.from('student_attendance').update(changes).eq('student_id', studentId).eq('on_date', onDate);
   if (error) throw error;
+}
+
+export type StudentAttendanceMonthSummary = {
+  /** 'YYYY-MM' */
+  month: string;
+  presentCount: number;
+  absentCount: number;
+  total: number;
+};
+
+export type StudentAttendanceSummary = {
+  totalDays: number;
+  presentCount: number;
+  absentCount: number;
+  months: StudentAttendanceMonthSummary[];
+};
+
+/**
+ * A rolled-up view of a student's attendance across the current academic
+ * year to date, for the profile's Attendance tab report card. 'late' counts
+ * as present here — the report only distinguishes "showed up" vs. "didn't".
+ */
+export async function fetchStudentAttendanceSummary(studentId: string): Promise<StudentAttendanceSummary> {
+  const empty: StudentAttendanceSummary = { totalDays: 0, presentCount: 0, absentCount: 0, months: [] };
+
+  const { data: year, error: yearError } = await supabase
+    .from('academic_years')
+    .select('starts_on, ends_on')
+    .eq('is_current', true)
+    .maybeSingle<{ starts_on: string; ends_on: string }>();
+  if (yearError) throw yearError;
+  if (!year) return empty;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const rangeEnd = today < year.ends_on ? today : year.ends_on;
+
+  const { data, error } = await supabase
+    .from('student_attendance')
+    .select('on_date, status')
+    .eq('student_id', studentId)
+    .gte('on_date', year.starts_on)
+    .lte('on_date', rangeEnd)
+    .order('on_date')
+    .returns<{ on_date: string; status: 'present' | 'absent' | 'late' }[]>();
+  if (error) throw error;
+
+  const rows = data ?? [];
+  const byMonth = new Map<string, StudentAttendanceMonthSummary>();
+  let presentCount = 0;
+  let absentCount = 0;
+
+  for (const row of rows) {
+    const attended = row.status !== 'absent';
+    if (attended) presentCount++;
+    else absentCount++;
+
+    const month = row.on_date.slice(0, 7);
+    const bucket = byMonth.get(month) ?? { month, presentCount: 0, absentCount: 0, total: 0 };
+    bucket.total++;
+    if (attended) bucket.presentCount++;
+    else bucket.absentCount++;
+    byMonth.set(month, bucket);
+  }
+
+  return { totalDays: rows.length, presentCount, absentCount, months: Array.from(byMonth.values()) };
 }

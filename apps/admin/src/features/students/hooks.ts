@@ -7,14 +7,18 @@ import {
   getStudentProfile,
   listClasses,
   listStudentsInClass,
+  listStudentsInClasses,
+  listUnassignedStudents,
+  searchEnrolledStudents,
   searchStudents,
 } from './api';
 
-export function useStudentSearch(query: string) {
+export function useStudentSearch(query: string, classIds?: string[]) {
   const term = query.trim();
+  const key = classIds && classIds.length > 0 ? [...classIds].sort() : null;
   return useQuery({
-    queryKey: ['students', 'search', term],
-    queryFn: () => searchStudents(term),
+    queryKey: ['students', 'search', term, key],
+    queryFn: () => searchStudents(term, classIds),
     enabled: term.length >= 2,
   });
 }
@@ -28,6 +32,29 @@ export function useStudentsInClass(classId: string | undefined) {
     queryKey: ['students', 'by-class', classId],
     queryFn: () => listStudentsInClass(classId as string),
     enabled: !!classId,
+  });
+}
+
+/** For a browse-by-grade filter: the merged roster of every class in `classIds`. */
+export function useStudentsInClasses(classIds: string[] | undefined) {
+  const key = classIds && classIds.length > 0 ? [...classIds].sort() : null;
+  return useQuery({
+    queryKey: ['students', 'by-classes', key],
+    queryFn: () => listStudentsInClasses(classIds as string[]),
+    enabled: !!classIds && classIds.length > 0,
+  });
+}
+
+export function useUnassignedStudents() {
+  return useQuery({ queryKey: ['students', 'unassigned'], queryFn: listUnassignedStudents });
+}
+
+export function useEnrolledStudentSearch(query: string) {
+  const term = query.trim();
+  return useQuery({
+    queryKey: ['students', 'search-enrolled', term],
+    queryFn: () => searchEnrolledStudents(term),
+    enabled: term.length >= 2,
   });
 }
 

@@ -46,7 +46,10 @@ export function AcademicStructureScreen() {
         classes={classes.data ?? []}
         grades={grades.data ?? []}
         currentYearId={currentYear?.id}
-        onChanged={() => queryClient.invalidateQueries({ queryKey: ['academicStructure', 'classes'] })}
+        onChanged={() => {
+          queryClient.invalidateQueries({ queryKey: ['academicStructure', 'classes'] });
+          queryClient.invalidateQueries({ queryKey: ['classes', 'current-year'] });
+        }}
       />
 
       <AssignmentsSection

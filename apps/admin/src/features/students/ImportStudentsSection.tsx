@@ -12,14 +12,37 @@ type ImportResult = {
   results: { row_index: number; id: string; accepted: boolean; error: string | null }[];
 };
 
-const COLUMNS = 'admission_no, full_name, preferred_name, date_of_birth, class_name, guardian_name, guardian_relationship, guardian_phone';
+const CSV_COLUMNS = [
+  'admission_no',
+  'full_name',
+  'preferred_name',
+  'date_of_birth',
+  'gender',
+  'class_name',
+  'guardian_nic_number',
+  'guardian_name',
+  'guardian_relationship',
+  'guardian_phone',
+  'guardian_phone_alt',
+  'guardian_email',
+  'guardian_occupation',
+  'guardian_economic_status',
+  'guardian_address',
+  'guardian_gs_division',
+];
+
+function duplicateMessage(error: string | null): string | null {
+  if (error === 'duplicate_admission_no') return 'Already exists in the system — skipped, no changes made.';
+  return null;
+}
 
 /**
  * section 8/build task 5: spreadsheet import. Section 10's screen table
  * has no dedicated route for this — it's a one-time administrative
  * operation, not a regular navigation destination — so it's folded into
- * StudentSearchScreen (already student-management-scoped) rather than a
- * new route (see backend/supabase/functions/import-records for the shared
+ * AddStudentScreen (already student-creation-scoped, and gated the same
+ * way — see useCanCreateStudents) rather than a new route (see
+ * backend/supabase/functions/import-records for the shared
  * per-row-savepoint pattern the RPC uses).
  */
 export function ImportStudentsSection() {
@@ -62,7 +85,14 @@ export function ImportStudentsSection() {
   return (
     <Card>
       <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>IMPORT (CSV)</Text>
-      <Text style={{ ...typography.caption, color: semantic.textSecondary }}>Columns: {COLUMNS}</Text>
+      <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>Columns:</Text>
+      <View style={{ gap: 2 }}>
+        {CSV_COLUMNS.map((c) => (
+          <Text key={c} style={{ ...typography.caption, color: semantic.textPrimary }}>
+            {c}
+          </Text>
+        ))}
+      </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
         <Button label="Choose file" size="sm" variant="outline" onPress={() => void pickFile()} />
         {fileName ? (
@@ -88,15 +118,18 @@ export function ImportStudentsSection() {
       {result ? (
         <View style={{ gap: spacing.xs }}>
           <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>
-            {result.accepted} accepted, {result.rejected} rejected of {result.total}
+            {result.accepted} student{result.accepted === 1 ? '' : 's'} created, {result.rejected} skipped of {result.total} rows
           </Text>
           {result.results
             .filter((r) => !r.accepted)
-            .map((r) => (
-              <Text key={r.row_index} style={{ ...typography.caption, color: colors.error }}>
-                Row {r.row_index} ({r.id || 'no id'}): {r.error}
-              </Text>
-            ))}
+            .map((r) => {
+              const dup = duplicateMessage(r.error);
+              return (
+                <Text key={r.row_index} style={{ ...typography.caption, color: dup ? colors.warning : colors.error }}>
+                  Row {r.row_index} ({r.id || 'no id'}): {dup ?? r.error}
+                </Text>
+              );
+            })}
         </View>
       ) : null}
     </Card>

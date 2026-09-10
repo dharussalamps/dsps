@@ -26,6 +26,13 @@ export function useIsPrincipal(): boolean {
   return data?.includes('principal') ?? false;
 }
 
+/** Mirrors import_students()'s role check (AdminSpec.md section 5.2) — creating/importing
+ * students is narrower than `student.edit`: principal and administrator only, not vice_principal. */
+export function useCanCreateStudents(): boolean {
+  const { data } = useMyRoleKeys();
+  return data?.some((key) => key === 'principal' || key === 'administrator') ?? false;
+}
+
 export type AuditFilters = { actorId?: string; entity?: string; fromDate?: string; toDate?: string };
 
 export function useAuditLog(filters: AuditFilters = {}) {

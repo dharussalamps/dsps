@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import { Button, Card, Hero, Screen, ScreenHeader, TextField } from '@/components';
+import { parseDMY } from '@/lib/date';
 import type { RootStackParamList } from '@/navigation/types';
 import { spacing, typography, semantic } from '@/theme/tokens';
 import { addAcademicYear, addTerm, updateSchoolSettings, updateWorkingWeekdays } from './api';
@@ -70,9 +71,15 @@ export function AcademicCalendarScreen() {
 
   async function saveYear() {
     if (!yearLabel.trim() || !yearStart.trim() || !yearEnd.trim()) return;
+    const isoYearStart = parseDMY(yearStart);
+    const isoYearEnd = parseDMY(yearEnd);
+    if (!isoYearStart || !isoYearEnd) {
+      Alert.alert('Invalid date', 'Enter dates as DD/MM/YYYY.');
+      return;
+    }
     setSaving(true);
     try {
-      await addAcademicYear({ label: yearLabel.trim(), startsOn: yearStart.trim(), endsOn: yearEnd.trim(), makeCurrent: true });
+      await addAcademicYear({ label: yearLabel.trim(), startsOn: isoYearStart, endsOn: isoYearEnd, makeCurrent: true });
       setAddingYear(false);
       setYearLabel('');
       setYearStart('');
@@ -87,14 +94,20 @@ export function AcademicCalendarScreen() {
 
   async function saveTerm() {
     if (!currentYear || !termName.trim() || !termSequence.trim() || !termStart.trim() || !termEnd.trim()) return;
+    const isoTermStart = parseDMY(termStart);
+    const isoTermEnd = parseDMY(termEnd);
+    if (!isoTermStart || !isoTermEnd) {
+      Alert.alert('Invalid date', 'Enter dates as DD/MM/YYYY.');
+      return;
+    }
     setSaving(true);
     try {
       await addTerm({
         academicYearId: currentYear.id,
         name: termName.trim(),
         sequence: Number(termSequence),
-        startsOn: termStart.trim(),
-        endsOn: termEnd.trim(),
+        startsOn: isoTermStart,
+        endsOn: isoTermEnd,
       });
       setAddingTerm(false);
       setTermName('');
@@ -140,8 +153,8 @@ export function AcademicCalendarScreen() {
           <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
             <TextField label="Name (e.g. Term 1)" value={termName} onChangeText={setTermName} />
             <TextField label="Sequence (1, 2, 3...)" value={termSequence} onChangeText={setTermSequence} keyboardType="numeric" />
-            <TextField label="Starts on" placeholder="YYYY-MM-DD" value={termStart} onChangeText={setTermStart} />
-            <TextField label="Ends on" placeholder="YYYY-MM-DD" value={termEnd} onChangeText={setTermEnd} />
+            <TextField label="Starts on" placeholder="DD/MM/YYYY" value={termStart} onChangeText={setTermStart} />
+            <TextField label="Ends on" placeholder="DD/MM/YYYY" value={termEnd} onChangeText={setTermEnd} />
             <View style={{ flexDirection: 'row', gap: spacing.xs }}>
               <Button label="Save" size="sm" onPress={() => void saveTerm()} loading={saving} />
               <Button label="Cancel" size="sm" variant="ghost" onPress={() => setAddingTerm(false)} />
@@ -168,8 +181,8 @@ export function AcademicCalendarScreen() {
         {addingYear ? (
           <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
             <TextField label="Label (e.g. 2027)" value={yearLabel} onChangeText={setYearLabel} />
-            <TextField label="Starts on" placeholder="YYYY-MM-DD" value={yearStart} onChangeText={setYearStart} />
-            <TextField label="Ends on" placeholder="YYYY-MM-DD" value={yearEnd} onChangeText={setYearEnd} />
+            <TextField label="Starts on" placeholder="DD/MM/YYYY" value={yearStart} onChangeText={setYearStart} />
+            <TextField label="Ends on" placeholder="DD/MM/YYYY" value={yearEnd} onChangeText={setYearEnd} />
             <Text style={{ ...typography.caption, color: semantic.textSecondary }}>This becomes the new current year.</Text>
             <View style={{ flexDirection: 'row', gap: spacing.xs }}>
               <Button label="Save" size="sm" onPress={() => void saveYear()} loading={saving} />
@@ -223,8 +236,15 @@ export function AcademicCalendarScreen() {
 
       <Card>
         <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>EDIT A DAY</Text>
-        <TextField label="Date" placeholder="YYYY-MM-DD" value={jumpDate} onChangeText={setJumpDate} />
-        <Button label="Open" disabled={!jumpDate.trim()} onPress={() => navigation.navigate('CalendarDayEditor', { date: jumpDate.trim() })} />
+        <TextField label="Date" placeholder="DD/MM/YYYY" value={jumpDate} onChangeText={setJumpDate} />
+        <Button
+          label="Open"
+          disabled={!parseDMY(jumpDate)}
+          onPress={() => {
+            const isoJumpDate = parseDMY(jumpDate);
+            if (isoJumpDate) navigation.navigate('CalendarDayEditor', { date: isoJumpDate });
+          }}
+        />
       </Card>
 
       <Button label="Classes, subjects & terms" variant="outline" onPress={() => navigation.navigate('AcademicStructure')} />

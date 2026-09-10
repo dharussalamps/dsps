@@ -4,6 +4,7 @@ import { differenceInCalendarDays, isValid, parseISO } from 'date-fns';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { parseDMY } from '@/lib/date';
 import { useAuthStore } from '@/store/authStore';
 import { spacing, typography, semantic } from '@/theme/tokens';
 import { requestLeave, withdrawLeave } from './api';
@@ -39,10 +40,16 @@ export function MyLeaveScreen() {
 
   async function submit() {
     setError(null);
-    const start = parseISO(startsOn);
-    const end = parseISO(endsOn || startsOn);
-    if (!leaveTypeId || !isValid(start) || !isValid(end) || !reason.trim()) {
-      setError('Fill in leave type, dates (YYYY-MM-DD) and a reason.');
+    const isoStartsOn = parseDMY(startsOn);
+    const isoEndsOn = parseDMY(endsOn || startsOn);
+    if (!leaveTypeId || !isoStartsOn || !isoEndsOn || !reason.trim()) {
+      setError('Fill in leave type, dates (DD/MM/YYYY) and a reason.');
+      return;
+    }
+    const start = parseISO(isoStartsOn);
+    const end = parseISO(isoEndsOn);
+    if (!isValid(start) || !isValid(end)) {
+      setError('Fill in leave type, dates (DD/MM/YYYY) and a reason.');
       return;
     }
     const dayCount = halfDay ? 0.5 : differenceInCalendarDays(end, start) + 1;
@@ -52,7 +59,7 @@ export function MyLeaveScreen() {
     }
     setSubmitting(true);
     try {
-      await requestLeave({ leaveTypeId, startsOn, endsOn: endsOn || startsOn, halfDay, dayCount, reason: reason.trim() });
+      await requestLeave({ leaveTypeId, startsOn: isoStartsOn, endsOn: isoEndsOn, halfDay, dayCount, reason: reason.trim() });
       setShowForm(false);
       setLeaveTypeId(null);
       setStartsOn('');
@@ -90,8 +97,8 @@ export function MyLeaveScreen() {
               />
             ))}
           </View>
-          <TextField label="Start date" placeholder="YYYY-MM-DD" value={startsOn} onChangeText={setStartsOn} />
-          <TextField label="End date (leave blank for one day)" placeholder="YYYY-MM-DD" value={endsOn} onChangeText={setEndsOn} />
+          <TextField label="Start date" placeholder="DD/MM/YYYY" value={startsOn} onChangeText={setStartsOn} />
+          <TextField label="End date (leave blank for one day)" placeholder="DD/MM/YYYY" value={endsOn} onChangeText={setEndsOn} />
           <Button
             label={halfDay ? 'Half day' : 'Mark as half day'}
             icon={halfDay ? 'checkmark' : undefined}

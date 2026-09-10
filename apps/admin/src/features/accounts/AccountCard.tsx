@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Avatar, Button, Card, Icon, StatusPill, TextField } from '@/components';
+import { parseDMY, toDMY } from '@/lib/date';
 import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
 import type { AccountRow, RoleOption } from './api';
 
@@ -64,7 +65,7 @@ export function AccountCard({
   const [fullName, setFullName] = useState(account.fullName);
   const [phone, setPhone] = useState(account.phone);
   const [email, setEmail] = useState(account.email ?? '');
-  const [birthDate, setBirthDate] = useState(account.birthDate ?? '');
+  const [birthDate, setBirthDate] = useState(toDMY(account.birthDate));
   const [editSaving, setEditSaving] = useState(false);
 
   function openEdit() {
@@ -72,12 +73,17 @@ export function AccountCard({
     setFullName(account.fullName);
     setPhone(account.phone);
     setEmail(account.email ?? '');
-    setBirthDate(account.birthDate ?? '');
+    setBirthDate(toDMY(account.birthDate));
     setIsEditing(true);
   }
 
   async function saveEdit() {
     if (!staffNo.trim() || !fullName.trim() || !phone.trim()) return;
+    const isoBirthDate = birthDate.trim() ? parseDMY(birthDate) : undefined;
+    if (birthDate.trim() && !isoBirthDate) {
+      Alert.alert('Invalid birth date', 'Enter birth date as DD/MM/YYYY.');
+      return;
+    }
     setEditSaving(true);
     try {
       await onUpdate({
@@ -85,7 +91,7 @@ export function AccountCard({
         fullName: fullName.trim(),
         phone: phone.trim(),
         email: email.trim() || undefined,
-        birthDate: birthDate.trim() || undefined,
+        birthDate: isoBirthDate ?? undefined,
       });
       setIsEditing(false);
     } catch (err) {
@@ -174,7 +180,7 @@ export function AccountCard({
           <TextField label="Full name" value={fullName} onChangeText={setFullName} />
           <TextField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
           <TextField label="Email (optional)" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-          <TextField label="Birth date (optional)" placeholder="YYYY-MM-DD" value={birthDate} onChangeText={setBirthDate} />
+          <TextField label="Birth date (optional)" placeholder="DD/MM/YYYY" value={birthDate} onChangeText={setBirthDate} />
           <View style={styles.chipRow}>
             <Button label="Save changes" icon="checkmark" size="sm" onPress={() => void saveEdit()} loading={editSaving} style={{ flex: 1 }} />
             <Button label="Cancel" size="sm" variant="ghost" onPress={() => setIsEditing(false)} />

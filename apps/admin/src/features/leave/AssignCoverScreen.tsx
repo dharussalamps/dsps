@@ -5,6 +5,7 @@ import { Text, View } from 'react-native';
 import { Button, Card, Hero, Screen, ScreenHeader, TextField } from '@/components';
 import { useClassesForCurrentYear } from '@/features/academicStructure/hooks';
 import { listStaff, type StaffSummary } from '@/features/staff/api';
+import { parseDMY } from '@/lib/date';
 import type { RootStackParamList } from '@/navigation/types';
 import { spacing, typography, semantic } from '@/theme/tokens';
 import { assignCover } from './api';
@@ -35,10 +36,16 @@ export function AssignCoverScreen() {
 
   async function save() {
     if (!classId || !staff || !startsOn.trim() || !endsOn.trim()) return;
+    const isoStartsOn = parseDMY(startsOn);
+    const isoEndsOn = parseDMY(endsOn);
+    if (!isoStartsOn || !isoEndsOn) {
+      setError('Enter both dates as DD/MM/YYYY.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      await assignCover({ classId, staffId: staff.id, startsOn: startsOn.trim(), endsOn: endsOn.trim(), reason: reason.trim() || undefined });
+      await assignCover({ classId, staffId: staff.id, startsOn: isoStartsOn, endsOn: isoEndsOn, reason: reason.trim() || undefined });
       navigation.goBack();
     } catch {
       setError('Could not assign cover. You may not have permission over this class.');
@@ -75,8 +82,8 @@ export function AssignCoverScreen() {
       </Card>
 
       <Card>
-        <TextField label="Starts on" placeholder="YYYY-MM-DD" value={startsOn} onChangeText={setStartsOn} />
-        <TextField label="Ends on" placeholder="YYYY-MM-DD" value={endsOn} onChangeText={setEndsOn} />
+        <TextField label="Starts on" placeholder="DD/MM/YYYY" value={startsOn} onChangeText={setStartsOn} />
+        <TextField label="Ends on" placeholder="DD/MM/YYYY" value={endsOn} onChangeText={setEndsOn} />
         <TextField label="Reason (optional)" value={reason} onChangeText={setReason} />
       </Card>
 

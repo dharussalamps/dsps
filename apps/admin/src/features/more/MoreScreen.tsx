@@ -19,6 +19,7 @@ type MenuItem = { label: string; route: keyof RootStackParamList; icon: IconName
 // left drawer — see DataEntryDrawer.tsx.
 const menu: MenuItem[] = [
   { label: 'Staff directory', route: 'StaffDirectory', icon: 'people-outline' },
+  { label: 'Set class', route: 'SetClass', icon: 'swap-horizontal-outline' },
   { label: 'Leave requests', route: 'LeaveRequests', icon: 'checkmark-done-outline' },
   { label: 'Marks review', route: 'MarksReview', icon: 'document-text-outline' },
   { label: 'Academic calendar', route: 'AcademicCalendar', icon: 'calendar-outline' },

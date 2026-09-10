@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
-import { Button, Card, Icon, TextField } from '@/components';
+import { Alert, Text, View } from 'react-native';
+import { Button, Card, Icon, SectionHeader, TextField } from '@/components';
+import { parseDMY } from '@/lib/date';
 import { useAuthStore } from '@/store/authStore';
 import { spacing, typography, semantic } from '@/theme/tokens';
 import { addAchievement, addMembership } from './api';
@@ -52,6 +53,11 @@ export function ActivitySection({ studentId }: { studentId: string }) {
 
   async function submitMembership() {
     if (!groupName.trim()) return;
+    const isoEndedOn = endedOn.trim() ? parseDMY(endedOn) : undefined;
+    if (endedOn.trim() && !isoEndedOn) {
+      Alert.alert('Invalid date', 'Enter the end date as DD/MM/YYYY.');
+      return;
+    }
     setSaving(true);
     try {
       await addMembership({
@@ -59,7 +65,7 @@ export function ActivitySection({ studentId }: { studentId: string }) {
         groupName: groupName.trim(),
         position: position.trim(),
         startedOn: new Date().toISOString().slice(0, 10),
-        endedOn: endedOn.trim() || undefined,
+        endedOn: isoEndedOn ?? undefined,
       });
       setMode('none');
       setGroupName('');
@@ -78,7 +84,7 @@ export function ActivitySection({ studentId }: { studentId: string }) {
   ) {
     return (
       <Card>
-        <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>ACTIVITY</Text>
+        <SectionHeader icon="ribbon-outline" label="ACTIVITY" />
         <View style={{ flexDirection: 'row', gap: spacing.xs }}>
           <Button label="Add achievement" size="sm" variant="outline" onPress={() => setMode('achievement')} />
           <Button label="Add membership" size="sm" variant="outline" onPress={() => setMode('membership')} />
@@ -89,15 +95,18 @@ export function ActivitySection({ studentId }: { studentId: string }) {
 
   return (
     <Card>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>ACTIVITY</Text>
-        {mode === 'none' ? (
-          <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-            <Button label="+ Achievement" size="sm" variant="ghost" onPress={() => setMode('achievement')} />
-            <Button label="+ Membership" size="sm" variant="ghost" onPress={() => setMode('membership')} />
-          </View>
-        ) : null}
-      </View>
+      <SectionHeader
+        icon="ribbon-outline"
+        label="ACTIVITY"
+        accessory={
+          mode === 'none' ? (
+            <>
+              <Button label="+ Achievement" size="sm" variant="ghost" onPress={() => setMode('achievement')} />
+              <Button label="+ Membership" size="sm" variant="ghost" onPress={() => setMode('membership')} />
+            </>
+          ) : undefined
+        }
+      />
 
       {mode === 'achievement' ? (
         <View style={{ gap: spacing.sm }}>
@@ -115,7 +124,7 @@ export function ActivitySection({ studentId }: { studentId: string }) {
         <View style={{ gap: spacing.sm }}>
           <TextField label="Group name (club, team, society or house)" value={groupName} onChangeText={setGroupName} />
           <TextField label="Position (optional)" value={position} onChangeText={setPosition} />
-          <TextField label="Ended on (optional, YYYY-MM-DD)" value={endedOn} onChangeText={setEndedOn} placeholder="leave blank if current" />
+          <TextField label="Ended on (optional, DD/MM/YYYY)" value={endedOn} onChangeText={setEndedOn} placeholder="leave blank if current" />
           <View style={{ flexDirection: 'row', gap: spacing.xs }}>
             <Button label="Save" size="sm" onPress={() => void submitMembership()} loading={saving} />
             <Button label="Cancel" size="sm" variant="ghost" onPress={() => setMode('none')} />

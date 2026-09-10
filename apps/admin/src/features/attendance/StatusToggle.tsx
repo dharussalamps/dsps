@@ -15,19 +15,23 @@ type Props = {
   onChange: (status: Status) => void;
   /** Read-only, e.g. a locked past date on MarkStaffAttendanceScreen — shows the current value but ignores taps. */
   disabled?: boolean;
+  /** MarkAttendanceScreen doesn't offer a "late" mark for students — only MarkStaffAttendanceScreen does. */
+  hideLate?: boolean;
 };
 
 /**
- * Three-way present/late/absent selector, sized for a fast thumb tap across
- * ~35 rows. The selected option fills solid with its status color and turns
- * its label white — a pale tint (the previous version, activeBg/activeFg
- * from the *Bg tokens) sat too close in lightness to the unselected cream
- * background to tell apart at a glance, especially warningBg vs cream100.
+ * Present/late/absent selector (present/absent only when hideLate), sized
+ * for a fast thumb tap across ~35 rows. The selected option fills solid
+ * with its status color and turns its label white — a pale tint (the
+ * previous version, activeBg/activeFg from the *Bg tokens) sat too close in
+ * lightness to the unselected cream background to tell apart at a glance,
+ * especially warningBg vs cream100.
  */
-export function StatusToggle({ value, onChange, disabled }: Props) {
+export function StatusToggle({ value, onChange, disabled, hideLate }: Props) {
+  const options = hideLate ? OPTIONS.filter((opt) => opt.status !== 'late') : OPTIONS;
   return (
     <View style={[styles.row, disabled && styles.rowDisabled]}>
-      {OPTIONS.map((opt) => {
+      {options.map((opt) => {
         const active = value === opt.status;
         return (
           <Pressable

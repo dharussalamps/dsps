@@ -50,6 +50,7 @@ export function StaffDirectoryScreen() {
             placeholder="Search by name or staff number"
             value={query}
             onChangeText={setQuery}
+            onClear={() => setQuery('')}
             autoCapitalize="none"
             style={{ backgroundColor: colors.white, borderWidth: 0 }}
           />

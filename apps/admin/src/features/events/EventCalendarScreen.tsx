@@ -2,9 +2,10 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Text, View } from 'react-native';
 import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, TextField } from '@/components';
 import { listStaff, type StaffSummary } from '@/features/staff/api';
+import { parseDMY } from '@/lib/date';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { semantic, spacing, typography } from '@/theme/tokens';
@@ -56,6 +57,12 @@ export function EventCalendarScreen() {
 
   async function submit() {
     if (!staff || !title.trim() || !startsOn.trim()) return;
+    const isoStartsOn = parseDMY(startsOn);
+    const isoEndsOn = endsOn.trim() ? parseDMY(endsOn) : undefined;
+    if (!isoStartsOn || (endsOn.trim() && !isoEndsOn)) {
+      Alert.alert('Invalid date', 'Enter dates as DD/MM/YYYY.');
+      return;
+    }
     setSaving(true);
     try {
       const days = reminderDays
@@ -66,8 +73,8 @@ export function EventCalendarScreen() {
         title: title.trim(),
         description: description.trim() || undefined,
         category: category.trim() || undefined,
-        startsOn: startsOn.trim(),
-        endsOn: endsOn.trim() || undefined,
+        startsOn: isoStartsOn,
+        endsOn: isoEndsOn ?? undefined,
         location: location.trim() || undefined,
         responsibleId: responsible?.id,
         reminderDays: days.length > 0 ? days : undefined,
@@ -105,10 +112,10 @@ export function EventCalendarScreen() {
             <TextField label="Category (optional)" value={category} onChangeText={setCategory} placeholder="e.g. sports, exam, holiday" />
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <View style={{ flex: 1 }}>
-                <TextField label="Starts on" placeholder="YYYY-MM-DD" value={startsOn} onChangeText={setStartsOn} />
+                <TextField label="Starts on" placeholder="DD/MM/YYYY" value={startsOn} onChangeText={setStartsOn} />
               </View>
               <View style={{ flex: 1 }}>
-                <TextField label="Ends on (optional)" placeholder="YYYY-MM-DD" value={endsOn} onChangeText={setEndsOn} />
+                <TextField label="Ends on (optional)" placeholder="DD/MM/YYYY" value={endsOn} onChangeText={setEndsOn} />
               </View>
             </View>
             <TextField label="Location (optional)" value={location} onChangeText={setLocation} />

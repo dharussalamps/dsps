@@ -51,5 +51,5 @@ export function GuardianCallButton({ studentId, guardianId, phone }: Props) {
     );
   }
 
-  return <Button label="Call" size="sm" variant="outline" onPress={call} />;
+  return <Button label="" accessibilityLabel="Call" icon="call" size="sm" variant="outline" onPress={call} />;
 }

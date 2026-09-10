@@ -26,10 +26,18 @@ const studentRowSchema = z.object({
   full_name: z.string().trim().min(1),
   preferred_name: z.string().trim().optional(),
   date_of_birth: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
+  gender: z.enum(['male', 'female']).optional().or(z.literal('')),
   class_name: z.string().trim().optional(),
+  guardian_nic_number: z.string().trim().optional(),
   guardian_name: z.string().trim().optional(),
   guardian_relationship: z.string().trim().optional(),
   guardian_phone: z.string().trim().optional(),
+  guardian_phone_alt: z.string().trim().optional(),
+  guardian_email: z.string().trim().email().optional().or(z.literal('')),
+  guardian_occupation: z.string().trim().optional(),
+  guardian_economic_status: z.string().trim().optional(),
+  guardian_address: z.string().trim().optional(),
+  guardian_gs_division: z.string().trim().optional(),
 });
 
 const staffRowSchema = z.object({

@@ -14,6 +14,7 @@ import { listInventoryItems } from '@/features/inventory/api';
 import { usePendingLeaveRequests } from '@/features/leave/hooks';
 import { useOutstandingMarkSheets } from '@/features/marks/hooks';
 import { fetchResponsibilitiesForStaff } from '@/features/staff/api';
+import { parseDMY, toDMY } from '@/lib/date';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { colors, semantic, spacing, typography } from '@/theme/tokens';
@@ -269,14 +270,19 @@ function NeedsAttention({
 function QuickActions() {
   const navigation = useNavigation<Nav>();
   const [closing, setClosing] = useState(false);
-  const [closeDate, setCloseDate] = useState(todayIso());
+  const [closeDate, setCloseDate] = useState(toDMY(todayIso()));
   const [closeLabel, setCloseLabel] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function submitClosure() {
+    const isoCloseDate = parseDMY(closeDate);
+    if (!isoCloseDate) {
+      Alert.alert('Invalid date', 'Enter the date as DD/MM/YYYY.');
+      return;
+    }
     setBusy(true);
     try {
-      await declareClosure(closeDate, closeLabel.trim() || undefined);
+      await declareClosure(isoCloseDate, closeLabel.trim() || undefined);
       setClosing(false);
       setCloseLabel('');
       Alert.alert('Closure declared', 'All staff have been notified.');
@@ -299,7 +305,7 @@ function QuickActions() {
       </View>
       {closing ? (
         <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
-          <TextField label="Date" placeholder="YYYY-MM-DD" value={closeDate} onChangeText={setCloseDate} />
+          <TextField label="Date" placeholder="DD/MM/YYYY" value={closeDate} onChangeText={setCloseDate} />
           <TextField label="Reason (optional)" value={closeLabel} onChangeText={setCloseLabel} placeholder="e.g. severe weather" />
           <View style={{ flexDirection: 'row', gap: spacing.xs }}>
             <Button label="Confirm closure" size="sm" variant="danger" loading={busy} onPress={() => void submitClosure()} />

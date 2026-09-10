@@ -144,37 +144,70 @@ export async function listVisibleMarkSheets(): Promise<MarkSheetSummary[]> {
 
 export type StudentMarkRow = {
   subjectName: string;
-  termName: string;
   score: number | null;
   maxScore: number;
   classAverage: number | null;
 };
 
-/** FR-MRK-05: "each subject shows the class average for the same subject and term beside the student's score." */
-export async function fetchStudentMarks(studentId: string): Promise<StudentMarkRow[]> {
+export type StudentTermMarks = {
+  termId: string;
+  termName: string;
+  sequence: number;
+  marks: StudentMarkRow[];
+};
+
+/**
+ * FR-MRK-05: "each subject shows the class average for the same subject and
+ * term beside the student's score." A student can have marks across every
+ * term a teacher has entered them for, so rows are grouped by term (and
+ * ordered by term sequence, matching the trend chart above this list) rather
+ * than returned as one flat, unordered list mixing terms together.
+ */
+export async function fetchStudentMarks(studentId: string): Promise<StudentTermMarks[]> {
   const { data, error } = await supabase
     .from('marks')
-    .select('score, mark_sheets(class_id, subject_id, term_id, max_score, subjects(name), terms(name))')
+    .select('score, mark_sheets(class_id, subject_id, term_id, max_score, subjects(name), terms(name, sequence))')
     .eq('student_id', studentId)
     .returns<
-      { score: number | null; mark_sheets: { class_id: string; subject_id: string; term_id: string; max_score: number; subjects: { name: string } | null; terms: { name: string } | null } | null }[]
+      {
+        score: number | null;
+        mark_sheets: {
+          class_id: string;
+          subject_id: string;
+          term_id: string;
+          max_score: number;
+          subjects: { name: string } | null;
+          terms: { name: string; sequence: number } | null;
+        } | null;
+      }[]
     >();
   if (error) throw error;
 
   const rows = (data ?? []).filter((r) => r.mark_sheets != null);
-  return Promise.all(
+  const flat = await Promise.all(
     rows.map(async (r) => {
       const ms = r.mark_sheets!;
       const average = await fetchClassSubjectAverage(ms.class_id, ms.subject_id, ms.term_id);
       return {
-        subjectName: ms.subjects?.name ?? '',
+        termId: ms.term_id,
         termName: ms.terms?.name ?? '',
+        sequence: ms.terms?.sequence ?? 0,
+        subjectName: ms.subjects?.name ?? '',
         score: r.score,
         maxScore: ms.max_score,
         classAverage: average,
       };
     }),
   );
+
+  const byTerm = new Map<string, StudentTermMarks>();
+  for (const row of flat) {
+    const bucket = byTerm.get(row.termId) ?? { termId: row.termId, termName: row.termName, sequence: row.sequence, marks: [] };
+    bucket.marks.push({ subjectName: row.subjectName, score: row.score, maxScore: row.maxScore, classAverage: row.classAverage });
+    byTerm.set(row.termId, bucket);
+  }
+
+  return Array.from(byTerm.values()).sort((a, b) => a.sequence - b.sequence);
 }
 
 export async function fetchClassSubjectAverage(classId: string, subjectId: string, termId: string): Promise<number | null> {

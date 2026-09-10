@@ -4,12 +4,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { addDays, format, parseISO } from 'date-fns';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Animated, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Avatar, Button, Card, DatePicker, EmptyState, Hero, Icon, Screen, ScreenHeader, StatusPill, type IconName } from '@/components';
+import { Avatar, Button, Card, DatePicker, EmptyState, Hero, Icon, Screen, ScreenHeader, StatusPill, SyncStatusBadge, type IconName } from '@/components';
 import { useIsPrincipal } from '@/features/accounts/hooks';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, elevation, radius, semantic, spacing, typography } from '@/theme/tokens';
 import { closeStaffAttendanceDay, markStaffAttendanceBulk, reopenStaffAttendanceDay, type StaffAttendanceRow } from './api';
-import { todayIso, useIsSchoolDay, useStaffAttendanceReopen, useStaffAttendanceToday } from './hooks';
+import { todayIso, useIsSchoolDay, useStaffAttendanceReopen, useStaffAttendanceSubmitted, useStaffAttendanceToday } from './hooks';
 import type { AttendanceEntry } from './schema';
 import { StatusToggle } from './StatusToggle';
 
@@ -30,18 +30,24 @@ export function MarkStaffAttendanceScreen() {
   const board = useStaffAttendanceToday(onDate);
   const schoolDay = useIsSchoolDay(onDate);
 
-  // Today is always open to anyone with attendance.mark_staff. A past date
-  // is locked for *everyone* — principal included — until a
-  // staff_attendance_reopens row exists for it; attendance.reopen_staff
-  // (principal only) gates *creating* that row, not writing directly —
-  // matched server-side by the mark_staff_attendance/_update RLS policies
-  // and mark_staff_attendance_bulk() (20260910010000_staff_attendance_
-  // reopen_required_for_all.sql). isPrincipal only decides whether this
-  // screen offers the reopen button; the backend is the real enforcement.
+  // A date is locked — for *everyone*, principal included — once it's
+  // either in the past, or it's today and has already been bulk-submitted
+  // once. Locked stays locked until a staff_attendance_reopens row exists
+  // for it; attendance.reopen_staff (principal only) gates *creating* that
+  // row, not writing directly — matched server-side by the
+  // mark_staff_attendance/_update RLS policies and mark_staff_attendance_
+  // bulk() (20260910030000_staff_attendance_lock_after_submit.sql).
+  // isPrincipal only decides whether this screen offers the reopen button;
+  // the backend is the real enforcement.
   const isPastDate = onDate < today;
   const isPrincipal = useIsPrincipal();
-  const reopen = useStaffAttendanceReopen(onDate, isPastDate);
-  const canEdit = !isPastDate || !!reopen.data;
+  // Always enabled (not just !isPastDate) — the lock computation below only
+  // needed this for today, but the sync badge's visibility also wants an
+  // accurate submitted flag for a past date, not just "assume locked means submitted."
+  const submitted = useStaffAttendanceSubmitted(onDate, true);
+  const locked = isPastDate || !!submitted.data;
+  const reopen = useStaffAttendanceReopen(onDate, locked);
+  const canEdit = !locked || !!reopen.data;
   const [reopening, setReopening] = useState(false);
 
   // Only explicit overrides live here — the displayed/submitted value for
@@ -136,7 +142,10 @@ export function MarkStaffAttendanceScreen() {
         onDate,
         board.data.map((s) => ({ staffId: s.staffId, status: marks[s.staffId] ?? defaultStatus(s.status) })),
       );
-      await queryClient.invalidateQueries({ queryKey: ['attendance', 'staff-board', onDate] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['attendance', 'staff-board', onDate] }),
+        queryClient.invalidateQueries({ queryKey: ['attendance', 'staff-submitted', onDate] }),
+      ]);
       navigation.goBack();
     } catch {
       Alert.alert('Could not mark attendance', 'You may not have permission to mark staff attendance.');
@@ -157,7 +166,7 @@ export function MarkStaffAttendanceScreen() {
             onDate={onDate}
             today={today}
             onChange={changeDate}
-            isPastDate={isPastDate}
+            locked={locked}
             isPrincipal={isPrincipal}
             canEdit={canEdit}
             reopen={reopen.data ?? null}
@@ -180,7 +189,7 @@ export function MarkStaffAttendanceScreen() {
             onDate={onDate}
             today={today}
             onChange={changeDate}
-            isPastDate={isPastDate}
+            locked={locked}
             isPrincipal={isPrincipal}
             canEdit={canEdit}
             reopen={reopen.data ?? null}
@@ -199,12 +208,14 @@ export function MarkStaffAttendanceScreen() {
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
       <Hero>
-        <ScreenHeader title="Staff attendance" tone="onPrimary" back={navigation.canGoBack()} hideBell />
+        <ScreenHeader title="Staff attendance" tone="onPrimary" back={navigation.canGoBack()} hideBell>
+          {submitted.data ? <SyncStatusBadge /> : null}
+        </ScreenHeader>
         <DateStrip
           onDate={onDate}
           today={today}
           onChange={changeDate}
-          isPastDate={isPastDate}
+          locked={locked}
           isPrincipal={isPrincipal}
           canEdit={canEdit}
           reopen={reopen.data ?? null}
@@ -213,6 +224,7 @@ export function MarkStaffAttendanceScreen() {
           onClose={confirmClose}
         />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+          {onDate === today ? <StatusPill label="Today" tone="gold" /> : null}
           <SchoolDayPill schoolDay={schoolDay.data} loading={schoolDay.isLoading} />
           <MarkingStatusPill markedCount={markedCount} totalCount={totalCount} />
         </View>
@@ -239,7 +251,7 @@ export function MarkStaffAttendanceScreen() {
                   <Avatar name={item.fullName} size={34} />
                   {edited ? <View style={styles.editedDot} /> : null}
                 </View>
-                <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary, flex: 1 }}>{item.fullName}</Text>
+                <Text style={{ ...typography.body, fontSize: 14, color: semantic.textPrimary, flex: 1 }}>{item.fullName}</Text>
                 <StatusToggle value={pending} onChange={(status) => setStatus(item.staffId, status)} disabled={!canEdit} />
               </Card>
             );
@@ -316,18 +328,19 @@ function SummaryStats({ data }: { data: StaffAttendanceRow[] }) {
 /**
  * Prev/next-day steppers as circular icon buttons flanking the date-picker
  * chip, plus a lock indicator pinned to the row's right edge (space-between)
- * — every date shows one: today is always an open padlock (never needs
- * reopening), a past date shows closed until a staff_attendance_reopens row
- * exists for it. Everyone sees the state; only a principal can tap it —
- * open to reopen, or closed again to re-lock (attendance.reopen_staff
- * server-side either way; see LockIndicator). Capped at today, since staff
- * attendance isn't marked for a future date.
+ * — every date shows one: open while it's still editable (today, before its
+ * first submit), closed once it's locked (a past date, or today after its
+ * first submit) and no staff_attendance_reopens row exists for it yet.
+ * Everyone sees the state; only a principal can tap it — open to reopen, or
+ * closed again to re-lock (attendance.reopen_staff server-side either way;
+ * see LockIndicator). Capped at today, since staff attendance isn't marked
+ * for a future date.
  */
 function DateStrip({
   onDate,
   today,
   onChange,
-  isPastDate,
+  locked,
   isPrincipal,
   canEdit,
   reopen,
@@ -338,7 +351,7 @@ function DateStrip({
   onDate: string;
   today: string;
   onChange: (isoDate: string) => void;
-  isPastDate: boolean;
+  locked: boolean;
   isPrincipal: boolean;
   canEdit: boolean;
   reopen: { reopenedByName: string; reopenedAt: string } | null;
@@ -373,7 +386,7 @@ function DateStrip({
         </Pressable>
       </View>
       <LockIndicator
-        isPastDate={isPastDate}
+        locked={locked}
         isPrincipal={isPrincipal}
         canEdit={canEdit}
         reopen={reopen}
@@ -386,14 +399,16 @@ function DateStrip({
 }
 
 /**
- * Open padlock whenever the date is editable (always true for today, or a
- * past date with a staff_attendance_reopens row), closed padlock otherwise.
- * A principal can tap either state on a past date — closed calls onReopen
- * (confirmed first), open calls onClose to lock it again (also confirmed
- * first). Today is never locked, so there's nothing to tap there either way.
+ * Open padlock while the date is still editable — either it's not locked at
+ * all yet (today, before its first submit), or it's locked but a
+ * staff_attendance_reopens row exists for it. Closed padlock once it's
+ * locked with no reopen row. A principal can tap it once it's locked either
+ * way — closed calls onReopen (confirmed first), reopened calls onClose to
+ * lock it again (also confirmed first). Not-yet-locked today has nothing to
+ * tap, since there's nothing to reopen.
  */
 function LockIndicator({
-  isPastDate,
+  locked,
   isPrincipal,
   canEdit,
   reopen,
@@ -401,7 +416,7 @@ function LockIndicator({
   onReopen,
   onClose,
 }: {
-  isPastDate: boolean;
+  locked: boolean;
   isPrincipal: boolean;
   canEdit: boolean;
   reopen: { reopenedByName: string; reopenedAt: string } | null;
@@ -409,18 +424,17 @@ function LockIndicator({
   onReopen: () => void;
   onClose: () => void;
 }) {
-  const locked = !canEdit;
-  const icon: IconName = locked ? 'lock-closed-outline' : 'lock-open-outline';
-  const actionable = isPastDate && isPrincipal;
-  const label = !isPastDate
-    ? "Today's attendance is always editable"
-    : locked
+  const icon: IconName = canEdit ? 'lock-open-outline' : 'lock-closed-outline';
+  const actionable = locked && isPrincipal;
+  const label = !locked
+    ? "Today's attendance is editable until it's submitted"
+    : canEdit
       ? isPrincipal
-        ? 'Locked — tap to reopen this date'
-        : 'Locked — ask a principal to reopen this date'
-      : isPrincipal
         ? `Reopened by ${reopen?.reopenedByName ?? 'a principal'} — tap to lock again`
-        : `Reopened by ${reopen?.reopenedByName ?? 'a principal'}, editable`;
+        : `Reopened by ${reopen?.reopenedByName ?? 'a principal'}, editable`
+      : isPrincipal
+        ? 'Locked — tap to reopen this date'
+        : 'Locked — ask a principal to reopen this date';
 
   const content = reopening ? (
     <ActivityIndicator size="small" color={colors.white} />
@@ -439,7 +453,7 @@ function LockIndicator({
   }
 
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={reopening} onPress={locked ? onReopen : onClose}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} disabled={reopening} onPress={canEdit ? onClose : onReopen}>
       {bubble}
     </Pressable>
   );

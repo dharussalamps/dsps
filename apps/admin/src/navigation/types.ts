@@ -17,6 +17,8 @@ export type RootStackParamList = {
   ClassList: undefined;
   ClassDetail: { classId: string };
   StudentProfile: { studentId: string };
+  AddStudent: undefined;
+  SetClass: undefined;
 
   MarkAttendance: { classId: string };
   MarkStaffAttendance: undefined;
@@ -26,7 +28,8 @@ export type RootStackParamList = {
     /** Instant local echo shown before the server-confirmed list (with consecutive-day counts) arrives — see MarkAttendanceScreen. */
     localAbsentees?: { studentId: string; fullName: string }[];
   };
-  EarlyLeave: { classId: string };
+  /** onDate defaults to today when omitted — existing callers that only ever recorded today's early leaves don't need to change. */
+  EarlyLeave: { classId: string; onDate?: string };
 
   MarkEntry: { classId: string; subjectId: string; termId: string };
   MarksReview: undefined;

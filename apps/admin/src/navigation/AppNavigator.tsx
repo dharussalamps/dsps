@@ -23,8 +23,10 @@ import { MyLeaveScreen } from '@/features/leave/MyLeaveScreen';
 import { MarkEntryScreen } from '@/features/marks/MarkEntryScreen';
 import { MarksReviewScreen } from '@/features/marks/MarksReviewScreen';
 import { SettingsScreen } from '@/features/settings/SettingsScreen';
+import { AddStudentScreen } from '@/features/students/AddStudentScreen';
 import { ClassDetailScreen } from '@/features/students/ClassDetailScreen';
 import { ClassListScreen } from '@/features/students/ClassListScreen';
+import { SetClassScreen } from '@/features/students/SetClassScreen';
 import { StudentProfileScreen } from '@/features/students/StudentProfileScreen';
 import { StaffDirectoryScreen } from '@/features/staff/StaffDirectoryScreen';
 import { StaffProfileScreen } from '@/features/staff/StaffProfileScreen';
@@ -53,6 +55,8 @@ export function AppNavigator() {
       <Stack.Screen name="ClassList" component={ClassListScreen} />
       <Stack.Screen name="ClassDetail" component={ClassDetailScreen} />
       <Stack.Screen name="StudentProfile" component={StudentProfileScreen} />
+      <Stack.Screen name="AddStudent" component={AddStudentScreen} />
+      <Stack.Screen name="SetClass" component={SetClassScreen} />
 
       <Stack.Screen name="MarkAttendance" component={MarkAttendanceScreen} />
       <Stack.Screen name="MarkStaffAttendance" component={MarkStaffAttendanceScreen} />

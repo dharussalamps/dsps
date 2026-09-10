@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, semantic, spacing } from '@/theme/tokens';
+import { parseDMY } from '@/lib/date';
 import { assignRole, createStaffAccount, createStaffLogin, revokeRole, setStaffStatus, updateStaffAccount, type AccountRow } from './api';
 import { AccountCard, confirmRevoke } from './AccountCard';
 import { useAccounts, useRoles } from './hooks';
@@ -56,6 +57,11 @@ export function UserAccountsScreen() {
 
   async function submitCreate() {
     if (!staffNo.trim() || !fullName.trim() || !phone.trim()) return;
+    const isoBirthDate = birthDate.trim() ? parseDMY(birthDate) : undefined;
+    if (birthDate.trim() && !isoBirthDate) {
+      Alert.alert('Invalid birth date', 'Enter birth date as DD/MM/YYYY.');
+      return;
+    }
     setSaving(true);
     try {
       await createStaffAccount({
@@ -63,7 +69,7 @@ export function UserAccountsScreen() {
         fullName: fullName.trim(),
         phone: phone.trim(),
         email: email.trim() || undefined,
-        birthDate: birthDate.trim() || undefined,
+        birthDate: isoBirthDate ?? undefined,
       });
       setCreating(false);
       setStaffNo('');
@@ -132,7 +138,7 @@ export function UserAccountsScreen() {
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
       <Hero>
-        <ScreenHeader title="Staff accounts" tone="onPrimary" back={navigation.canGoBack()}>
+        <ScreenHeader title="Staff accounts" tone="onPrimary" back={navigation.canGoBack()} hideBell>
           <View style={styles.headerActions}>
             <Pressable
               accessibilityRole="button"
@@ -172,7 +178,7 @@ export function UserAccountsScreen() {
                 autoCapitalize="none"
                 keyboardType="email-address"
               />
-              <TextField label="Birth date (optional)" placeholder="YYYY-MM-DD" value={birthDate} onChangeText={setBirthDate} />
+              <TextField label="Birth date (optional)" placeholder="DD/MM/YYYY" value={birthDate} onChangeText={setBirthDate} />
               <Button label="Save" onPress={() => void submitCreate()} loading={saving} />
             </Card>
           ) : null}
