@@ -1,8 +1,8 @@
-import { useRoute, type RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Screen, ScreenHeader, StatusPill } from '@/components';
+import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill } from '@/components';
 import { useCurrentTerm, useStudentMarks, useStudentTermPosition, useStudentTermTrend } from '@/features/marks/hooks';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
@@ -17,6 +17,7 @@ import { useStudentGuardians, useStudentProfile } from './hooks';
 type Route = RouteProp<RootStackParamList, 'StudentProfile'>;
 
 export function StudentProfileScreen() {
+  const navigation = useNavigation();
   const { params } = useRoute<Route>();
   const profile = useStudentProfile(params.studentId);
   const guardians = useStudentGuardians(params.studentId);
@@ -30,7 +31,10 @@ export function StudentProfileScreen() {
 
   if (profile.isLoading) {
     return (
-      <Screen>
+      <Screen padded={false} edges={['left', 'right']}>
+        <Hero>
+          <ScreenHeader title="Student" tone="onPrimary" back={navigation.canGoBack()} />
+        </Hero>
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
       </Screen>
     );
@@ -38,8 +42,13 @@ export function StudentProfileScreen() {
 
   if (!profile.data) {
     return (
-      <Screen>
-        <EmptyState title="Student not found" message="It may be outside what you have access to view." />
+      <Screen padded={false} edges={['left', 'right']}>
+        <Hero>
+          <ScreenHeader title="Student" tone="onPrimary" back={navigation.canGoBack()} />
+        </Hero>
+        <View style={{ padding: spacing.lg }}>
+          <EmptyState title="Student not found" message="It may be outside what you have access to view." />
+        </View>
       </Screen>
     );
   }
@@ -78,10 +87,13 @@ export function StudentProfileScreen() {
   }
 
   return (
-    <Screen>
-      <ScreenHeader title={displayName} subtitle={s.admissionNo}>
-        {s.status !== 'active' ? <StatusPill label={s.status} tone="neutral" /> : null}
-      </ScreenHeader>
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title={displayName} subtitle={s.admissionNo} tone="onPrimary" back={navigation.canGoBack()}>
+          {s.status !== 'active' ? <StatusPill label={s.status} tone="neutral" /> : null}
+        </ScreenHeader>
+      </Hero>
+      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
 
       <Card>
         <Row label="Class" value={s.className ?? '—'} />
@@ -163,6 +175,7 @@ export function StudentProfileScreen() {
           />
         </Card>
       ) : null}
+      </View>
     </Screen>
   );
 }

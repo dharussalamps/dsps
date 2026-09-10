@@ -1,8 +1,8 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
-import { ActivityIndicator, Text } from 'react-native';
-import { Button, Card, EmptyState, Screen, ScreenHeader, TextField } from '@/components';
+import { ActivityIndicator, Text, View } from 'react-native';
+import { Button, Card, EmptyState, Hero, Icon, Screen, ScreenHeader, TextField } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { spacing, typography, semantic } from '@/theme/tokens';
@@ -37,15 +37,23 @@ export function EventDetailScreen() {
 
   if (event.isLoading) {
     return (
-      <Screen>
+      <Screen padded={false} edges={['left', 'right']}>
+        <Hero>
+          <ScreenHeader title="Event" tone="onPrimary" back={navigation.canGoBack()} />
+        </Hero>
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
       </Screen>
     );
   }
   if (!event.data) {
     return (
-      <Screen>
-        <EmptyState title="Event not found" />
+      <Screen padded={false} edges={['left', 'right']}>
+        <Hero>
+          <ScreenHeader title="Event" tone="onPrimary" back={navigation.canGoBack()} />
+        </Hero>
+        <View style={{ padding: spacing.lg }}>
+          <EmptyState title="Event not found" />
+        </View>
       </Screen>
     );
   }
@@ -53,11 +61,19 @@ export function EventDetailScreen() {
   const e = event.data;
 
   return (
-    <Screen>
-      <ScreenHeader title={e.title} subtitle={e.startsOn} />
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title={e.title} subtitle={e.startsOn} tone="onPrimary" back={navigation.canGoBack()} />
+      </Hero>
+      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
       <Card>
         {e.description ? <Text style={{ ...typography.body, color: semantic.textPrimary }}>{e.description}</Text> : null}
-        {e.location ? <Text style={{ ...typography.caption, color: semantic.textSecondary }}>📍 {e.location}</Text> : null}
+        {e.location ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+            <Icon name="location-outline" size={14} color={semantic.textSecondary} />
+            <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{e.location}</Text>
+          </View>
+        ) : null}
         {e.responsibleName ? <Text style={{ ...typography.caption, color: semantic.textSecondary }}>Responsible: {e.responsibleName}</Text> : null}
       </Card>
 
@@ -69,6 +85,7 @@ export function EventDetailScreen() {
       ) : (
         <Button label="Add to diary" variant="outline" onPress={() => setAddingToDiary(true)} />
       )}
+      </View>
     </Screen>
   );
 }

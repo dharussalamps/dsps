@@ -1,13 +1,14 @@
+import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
-import { Button, Card, EmptyState, ScreenHeader, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, TextField } from '@/components';
 import { listStaff, type StaffSummary } from '@/features/staff/api';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { semantic, spacing, typography } from '@/theme/tokens';
 import { useAuditEntities, useAuditLog } from './hooks';
 
 /** FR-ADM-05: "the principal may search the audit log by actor, entity, or date range." */
 export function AuditLogScreen() {
+  const navigation = useNavigation();
   const [entity, setEntity] = useState<string | null>(null);
   const [actor, setActor] = useState<StaffSummary | null>(null);
   const [actorQuery, setActorQuery] = useState('');
@@ -40,12 +41,14 @@ export function AuditLogScreen() {
   const hasFilters = !!entity || !!actor || !!fromDate.trim() || !!toDate.trim();
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background }} edges={['top', 'left', 'right']}>
-      <View style={{ padding: spacing.lg, gap: spacing.sm }}>
-        <ScreenHeader title="Audit log" subtitle={`${audit.data?.length ?? 0} entries${hasFilters ? ' (filtered)' : ''}`}>
-          <Button label={showFilters ? 'Hide filters' : 'Filters'} size="sm" variant="outline" onPress={() => setShowFilters((v) => !v)} />
+    <Screen scroll={false} padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Audit log" subtitle={`${audit.data?.length ?? 0} entries${hasFilters ? ' (filtered)' : ''}`} tone="onPrimary" back={navigation.canGoBack()}>
+          <Button label={showFilters ? 'Hide filters' : 'Filters'} icon="filter-outline" size="sm" variant="secondary" onPress={() => setShowFilters((v) => !v)} />
         </ScreenHeader>
+      </Hero>
 
+      <View style={{ padding: spacing.lg, gap: spacing.sm }}>
         {showFilters ? (
           <Card>
             <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>ENTITY</Text>
@@ -98,6 +101,6 @@ export function AuditLogScreen() {
           )}
         />
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }

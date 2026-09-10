@@ -1,12 +1,14 @@
+import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Screen, ScreenHeader, StatusPill } from '@/components';
+import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill } from '@/components';
 import { semantic, spacing, typography } from '@/theme/tokens';
 import { reopenMarkSheet } from './api';
 import { useVisibleMarkSheets } from './hooks';
 
 export function MarksReviewScreen() {
+  const navigation = useNavigation();
   const sheets = useVisibleMarkSheets();
   const queryClient = useQueryClient();
   const [reopening, setReopening] = useState<string | null>(null);
@@ -22,12 +24,14 @@ export function MarksReviewScreen() {
   }
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Marks review" tone="onPrimary" back={navigation.canGoBack()} />
+      </Hero>
       <FlatList
         data={sheets.data ?? []}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}
-        ListHeaderComponent={<ScreenHeader title="Marks review" />}
         ListEmptyComponent={
           sheets.isLoading ? (
             <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />

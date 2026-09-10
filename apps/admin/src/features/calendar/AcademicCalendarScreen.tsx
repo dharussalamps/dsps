@@ -3,7 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Alert, Text, View } from 'react-native';
-import { Button, Card, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, Hero, Screen, ScreenHeader, TextField } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
 import { spacing, typography, semantic } from '@/theme/tokens';
 import { addAcademicYear, addTerm, updateSchoolSettings, updateWorkingWeekdays } from './api';
@@ -117,8 +117,11 @@ export function AcademicCalendarScreen() {
   }
 
   return (
-    <Screen>
-      <ScreenHeader title="Academic calendar" subtitle={currentYear ? `Year ${currentYear.label}` : settings.data?.schoolName} />
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Academic calendar" subtitle={currentYear ? `Year ${currentYear.label}` : settings.data?.schoolName} tone="onPrimary" back={navigation.canGoBack()} />
+      </Hero>
+      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
 
       <Card>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -225,6 +228,7 @@ export function AcademicCalendarScreen() {
       </Card>
 
       <Button label="Classes, subjects & terms" variant="outline" onPress={() => navigation.navigate('AcademicStructure')} />
+      </View>
     </Screen>
   );
 }

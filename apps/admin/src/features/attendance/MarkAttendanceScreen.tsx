@@ -2,11 +2,10 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
-import { Button, EmptyState, SyncStatusBadge } from '@/components';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button, EmptyState, Hero, Screen, ScreenHeader, SyncStatusBadge } from '@/components';
 import { enqueueOperation } from '@/lib/offline/queue';
 import type { RootStackParamList } from '@/navigation/types';
-import { semantic, spacing, typography } from '@/theme/tokens';
+import { colors, semantic, spacing, typography } from '@/theme/tokens';
 import { fetchRosterForCaching } from './api';
 import { deviceId } from './init';
 import { cacheRoster, getCachedRoster, type CachedRosterStudent } from './rosterCache';
@@ -93,33 +92,43 @@ export function MarkAttendanceScreen() {
 
   if (roster === null) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={semantic.primary} />
-      </SafeAreaView>
+      <Screen padded={false} edges={['left', 'right']}>
+        <Hero>
+          <ScreenHeader title="Mark attendance" tone="onPrimary" back={navigation.canGoBack()} />
+        </Hero>
+        <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
+      </Screen>
     );
   }
 
   if (roster.length === 0) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background }} edges={['top', 'left', 'right']}>
-        <EmptyState title="No cached roster" message="Connect to the internet once to load this class, then marking works offline." />
-      </SafeAreaView>
+      <Screen padded={false} edges={['left', 'right']}>
+        <Hero>
+          <ScreenHeader title="Mark attendance" tone="onPrimary" back={navigation.canGoBack()} />
+        </Hero>
+        <View style={{ padding: spacing.lg }}>
+          <EmptyState title="No cached roster" message="Connect to the internet once to load this class, then marking works offline." />
+        </View>
+      </Screen>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background }} edges={['top', 'left', 'right']}>
-      <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.sm, gap: spacing.sm }}>
-        <SyncStatusBadge />
-        <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
+    <Screen scroll={false} padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Mark attendance" tone="onPrimary" back={navigation.canGoBack()}>
+          <SyncStatusBadge />
+        </ScreenHeader>
+        <Text style={{ ...typography.caption, color: colors.cream100 }}>
           {roster.length} students · every student starts marked present
         </Text>
-      </View>
+      </Hero>
 
       <FlatList
         data={roster}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm, paddingBottom: 120 }}
+        contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm, paddingBottom: 120 }}
         renderItem={({ item }) => (
           <View
             style={{
@@ -164,7 +173,7 @@ export function MarkAttendanceScreen() {
           loading={submitting}
         />
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 }
 

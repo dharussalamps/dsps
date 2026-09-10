@@ -5,7 +5,9 @@ export type TabParamList = {
   Home: undefined;
   StudentSearch: undefined;
   AttendanceBoard: undefined;
+  /** Principals see StaffTab here instead — see TabsNavigator's useIsPrincipal branch. */
   Announcements: undefined;
+  StaffTab: undefined;
   More: undefined;
 };
 
@@ -17,6 +19,7 @@ export type RootStackParamList = {
   StudentProfile: { studentId: string };
 
   MarkAttendance: { classId: string };
+  MarkStaffAttendance: undefined;
   AttendanceSubmitted: {
     classId: string;
     onDate: string;

@@ -5,6 +5,7 @@ import { NotificationsScreen } from '@/features/notifications/NotificationsScree
 import { AssignCoverScreen } from '@/features/leave/AssignCoverScreen';
 import { AttendanceSubmittedScreen } from '@/features/attendance/AttendanceSubmittedScreen';
 import { MarkAttendanceScreen } from '@/features/attendance/MarkAttendanceScreen';
+import { MarkStaffAttendanceScreen } from '@/features/attendance/MarkStaffAttendanceScreen';
 import { AuditLogScreen } from '@/features/accounts/AuditLogScreen';
 import { UserAccountsScreen } from '@/features/accounts/UserAccountsScreen';
 import { AnalyticsScreen } from '@/features/analytics/AnalyticsScreen';
@@ -27,17 +28,10 @@ import { ClassListScreen } from '@/features/students/ClassListScreen';
 import { StudentProfileScreen } from '@/features/students/StudentProfileScreen';
 import { StaffDirectoryScreen } from '@/features/staff/StaffDirectoryScreen';
 import { StaffProfileScreen } from '@/features/staff/StaffProfileScreen';
-import { colors, semantic } from '@/theme/tokens';
 import { TabsNavigator } from './TabsNavigator';
 import type { RootStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
-
-const headerOptions = {
-  headerStyle: { backgroundColor: semantic.primary },
-  headerTintColor: colors.white,
-  headerTitleStyle: { fontWeight: '700' as const },
-};
 
 /**
  * Every screen in AdminSpec.md section 10 has a real component as of
@@ -45,49 +39,55 @@ const headerOptions = {
  * actually covers vs. still-open scope within a screen (e.g. permission-
  * filtered visibility). Registered explicitly (rather than looped from an
  * array) so each screen keeps its own typed route params.
+ *
+ * The native header is off everywhere: every screen renders its own themed
+ * Hero + ScreenHeader (with a back chevron via `back`), so there's a single
+ * consistent header instead of stacking a plain native title bar underneath
+ * the app's own one.
  */
 export function AppNavigator() {
   return (
-    <Stack.Navigator screenOptions={headerOptions}>
-      <Stack.Screen name="Tabs" component={TabsNavigator} options={{ headerShown: false }} />
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Tabs" component={TabsNavigator} />
 
-      <Stack.Screen name="ClassList" component={ClassListScreen} options={{ title: 'Classes' }} />
-      <Stack.Screen name="ClassDetail" component={ClassDetailScreen} options={{ title: 'Class' }} />
-      <Stack.Screen name="StudentProfile" component={StudentProfileScreen} options={{ title: 'Student' }} />
+      <Stack.Screen name="ClassList" component={ClassListScreen} />
+      <Stack.Screen name="ClassDetail" component={ClassDetailScreen} />
+      <Stack.Screen name="StudentProfile" component={StudentProfileScreen} />
 
-      <Stack.Screen name="MarkAttendance" component={MarkAttendanceScreen} options={{ title: 'Mark attendance' }} />
-      <Stack.Screen name="AttendanceSubmitted" component={AttendanceSubmittedScreen} options={{ title: 'Attendance submitted' }} />
-      <Stack.Screen name="EarlyLeave" component={EarlyLeaveScreen} options={{ title: 'Early leave' }} />
+      <Stack.Screen name="MarkAttendance" component={MarkAttendanceScreen} />
+      <Stack.Screen name="MarkStaffAttendance" component={MarkStaffAttendanceScreen} />
+      <Stack.Screen name="AttendanceSubmitted" component={AttendanceSubmittedScreen} />
+      <Stack.Screen name="EarlyLeave" component={EarlyLeaveScreen} />
 
-      <Stack.Screen name="MarkEntry" component={MarkEntryScreen} options={{ title: 'Enter marks' }} />
-      <Stack.Screen name="MarksReview" component={MarksReviewScreen} options={{ title: 'Marks review' }} />
+      <Stack.Screen name="MarkEntry" component={MarkEntryScreen} />
+      <Stack.Screen name="MarksReview" component={MarksReviewScreen} />
 
-      <Stack.Screen name="StaffDirectory" component={StaffDirectoryScreen} options={{ title: 'Staff directory' }} />
-      <Stack.Screen name="StaffProfile" component={StaffProfileScreen} options={{ title: 'Staff profile' }} />
+      <Stack.Screen name="StaffDirectory" component={StaffDirectoryScreen} />
+      <Stack.Screen name="StaffProfile" component={StaffProfileScreen} />
 
-      <Stack.Screen name="MyLeave" component={MyLeaveScreen} options={{ title: 'My leave' }} />
-      <Stack.Screen name="LeaveRequests" component={LeaveRequestsScreen} options={{ title: 'Leave requests' }} />
-      <Stack.Screen name="LeaveRequestDetail" component={LeaveRequestDetailScreen} options={{ title: 'Leave request' }} />
+      <Stack.Screen name="MyLeave" component={MyLeaveScreen} />
+      <Stack.Screen name="LeaveRequests" component={LeaveRequestsScreen} />
+      <Stack.Screen name="LeaveRequestDetail" component={LeaveRequestDetailScreen} />
 
-      <Stack.Screen name="ComposeAnnouncement" component={ComposeAnnouncementScreen} options={{ title: 'New announcement' }} />
+      <Stack.Screen name="ComposeAnnouncement" component={ComposeAnnouncementScreen} />
 
-      <Stack.Screen name="Inventory" component={InventoryScreen} options={{ title: 'Inventory' }} />
-      <Stack.Screen name="InventoryItem" component={InventoryItemScreen} options={{ title: 'Item' }} />
+      <Stack.Screen name="Inventory" component={InventoryScreen} />
+      <Stack.Screen name="InventoryItem" component={InventoryItemScreen} />
 
-      <Stack.Screen name="EventCalendar" component={EventCalendarScreen} options={{ title: 'Events' }} />
-      <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event' }} />
-      <Stack.Screen name="Diary" component={DiaryScreen} options={{ title: 'School diary' }} />
+      <Stack.Screen name="EventCalendar" component={EventCalendarScreen} />
+      <Stack.Screen name="EventDetail" component={EventDetailScreen} />
+      <Stack.Screen name="Diary" component={DiaryScreen} />
 
-      <Stack.Screen name="AcademicCalendar" component={AcademicCalendarScreen} options={{ title: 'Academic calendar' }} />
-      <Stack.Screen name="CalendarDayEditor" component={CalendarDayEditorScreen} options={{ title: 'Edit day' }} />
-      <Stack.Screen name="AcademicStructure" component={AcademicStructureScreen} options={{ title: 'Classes & subjects' }} />
+      <Stack.Screen name="AcademicCalendar" component={AcademicCalendarScreen} />
+      <Stack.Screen name="CalendarDayEditor" component={CalendarDayEditorScreen} />
+      <Stack.Screen name="AcademicStructure" component={AcademicStructureScreen} />
 
-      <Stack.Screen name="Analytics" component={AnalyticsScreen} options={{ title: 'Analytics' }} />
-      <Stack.Screen name="UserAccounts" component={UserAccountsScreen} options={{ title: 'User accounts' }} />
-      <Stack.Screen name="AuditLog" component={AuditLogScreen} options={{ title: 'Audit log' }} />
-      <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
-      <Stack.Screen name="Notifications" component={NotificationsScreen} options={{ title: 'Notifications' }} />
-      <Stack.Screen name="AssignCover" component={AssignCoverScreen} options={{ title: 'Assign cover teacher' }} />
+      <Stack.Screen name="Analytics" component={AnalyticsScreen} />
+      <Stack.Screen name="UserAccounts" component={UserAccountsScreen} />
+      <Stack.Screen name="AuditLog" component={AuditLogScreen} />
+      <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="AssignCover" component={AssignCoverScreen} />
     </Stack.Navigator>
   );
 }

@@ -2,7 +2,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, View } from 'react-native';
-import { Button, EmptyState, Screen, ScreenHeader } from '@/components';
+import { Button, EmptyState, Hero, Screen, ScreenHeader } from '@/components';
 import { todayIso, useExistingSubmission } from '@/features/attendance/hooks';
 import { useCurrentTerm, useSubjectsForTeacherInClass } from '@/features/marks/hooks';
 import type { RootStackParamList } from '@/navigation/types';
@@ -32,14 +32,16 @@ export function ClassDetailScreen() {
   const currentTerm = useCurrentTerm();
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Roster" subtitle={`${roster.data?.length ?? 0} students`} tone="onPrimary" back={navigation.canGoBack()} />
+      </Hero>
       <FlatList
         data={roster.data ?? []}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}
         ListHeaderComponent={
           <View style={{ gap: spacing.md, marginBottom: spacing.sm }}>
-            <ScreenHeader title="Roster" subtitle={`${roster.data?.length ?? 0} students`} />
             {submission.data ? (
               <Button
                 label="View today's attendance"

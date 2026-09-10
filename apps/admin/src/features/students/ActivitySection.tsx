@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
-import { Button, Card, TextField } from '@/components';
+import { Button, Card, Icon, TextField } from '@/components';
 import { useAuthStore } from '@/store/authStore';
 import { spacing, typography, semantic } from '@/theme/tokens';
 import { addAchievement, addMembership } from './api';
@@ -125,7 +125,10 @@ export function ActivitySection({ studentId }: { studentId: string }) {
 
       {achievements.data?.map((a) => (
         <View key={a.id} style={{ paddingVertical: spacing.xs }}>
-          <Text style={{ ...typography.body, color: semantic.textPrimary }}>🏆 {a.title}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+            <Icon name="trophy-outline" size={16} color={semantic.textPrimary} />
+            <Text style={{ ...typography.body, color: semantic.textPrimary }}>{a.title}</Text>
+          </View>
           <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
             {[a.level, a.category, a.achievedOn].filter(Boolean).join(' · ')}
           </Text>
@@ -133,7 +136,10 @@ export function ActivitySection({ studentId }: { studentId: string }) {
       ))}
       {memberships.data?.map((m) => (
         <View key={m.id} style={{ paddingVertical: spacing.xs }}>
-          <Text style={{ ...typography.body, color: semantic.textPrimary }}>👥 {m.groupName}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+            <Icon name="people-outline" size={16} color={semantic.textPrimary} />
+            <Text style={{ ...typography.body, color: semantic.textPrimary }}>{m.groupName}</Text>
+          </View>
           <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
             {[m.position, m.startedOn ? `${m.startedOn.slice(0, 4)}–${m.endedOn ? m.endedOn.slice(0, 4) : 'present'}` : null]
               .filter(Boolean)

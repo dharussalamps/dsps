@@ -2,10 +2,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Linking, Text, View } from 'react-native';
-import { Button, Card, EmptyState, ScreenHeader, StatusPill, TextField } from '@/components';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
-import { semantic, spacing, typography } from '@/theme/tokens';
+import { colors, semantic, spacing, typography } from '@/theme/tokens';
 import { todayIso } from '@/features/attendance/hooks';
 import { useDutyRoster, useStaffDirectory, useTodayPresence } from './hooks';
 
@@ -25,17 +24,41 @@ export function StaffDirectoryScreen() {
   const presence = useTodayPresence(todayIso());
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background }} edges={['top', 'left', 'right']}>
-      <View style={{ padding: spacing.lg, gap: spacing.lg, flex: 1 }}>
-        <ScreenHeader title="Staff directory" />
+    <Screen scroll={false} padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Staff directory" tone="onPrimary" back={navigation.canGoBack()} />
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <Button label="By person" size="sm" variant={tab === 'people' ? 'primary' : 'outline'} onPress={() => setTab('people')} />
-          <Button label="By duty" size="sm" variant={tab === 'duties' ? 'primary' : 'outline'} onPress={() => setTab('duties')} />
+          <Button
+            label="By person"
+            size="sm"
+            variant={tab === 'people' ? 'secondary' : 'outline'}
+            textColor={tab === 'people' ? undefined : colors.white}
+            style={tab === 'people' ? undefined : { borderColor: 'rgba(255,255,255,0.6)' }}
+            onPress={() => setTab('people')}
+          />
+          <Button
+            label="By duty"
+            size="sm"
+            variant={tab === 'duties' ? 'secondary' : 'outline'}
+            textColor={tab === 'duties' ? undefined : colors.white}
+            style={tab === 'duties' ? undefined : { borderColor: 'rgba(255,255,255,0.6)' }}
+            onPress={() => setTab('duties')}
+          />
         </View>
+        {tab === 'people' ? (
+          <TextField
+            placeholder="Search by name or staff number"
+            value={query}
+            onChangeText={setQuery}
+            autoCapitalize="none"
+            style={{ backgroundColor: colors.white, borderWidth: 0 }}
+          />
+        ) : null}
+      </Hero>
 
+      <View style={{ flex: 1, padding: spacing.lg }}>
         {tab === 'people' ? (
           <>
-            <TextField placeholder="Search by name or staff number" value={query} onChangeText={setQuery} autoCapitalize="none" />
             {staff.isLoading ? (
               <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
             ) : (
@@ -84,6 +107,6 @@ export function StaffDirectoryScreen() {
           />
         )}
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 }

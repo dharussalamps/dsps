@@ -1,8 +1,9 @@
+import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { differenceInCalendarDays, isValid, parseISO } from 'date-fns';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
-import { Button, Card, EmptyState, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
 import { useAuthStore } from '@/store/authStore';
 import { spacing, typography, semantic } from '@/theme/tokens';
 import { requestLeave, withdrawLeave } from './api';
@@ -16,6 +17,7 @@ const statusTone: Record<string, 'success' | 'warning' | 'error' | 'neutral'> = 
 };
 
 export function MyLeaveScreen() {
+  const navigation = useNavigation();
   const staff = useAuthStore((s) => s.staff);
   const queryClient = useQueryClient();
   const leaveTypes = useLeaveTypes();
@@ -66,10 +68,13 @@ export function MyLeaveScreen() {
   }
 
   return (
-    <Screen>
-      <ScreenHeader title="My leave">
-        <Button label={showForm ? 'Cancel' : 'Request leave'} size="sm" onPress={() => setShowForm((v) => !v)} />
-      </ScreenHeader>
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="My leave" tone="onPrimary" back={navigation.canGoBack()}>
+          <Button label={showForm ? 'Cancel' : 'Request leave'} icon={showForm ? 'close' : 'add'} size="sm" variant="secondary" onPress={() => setShowForm((v) => !v)} />
+        </ScreenHeader>
+      </Hero>
+      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
 
       {showForm ? (
         <Card>
@@ -87,7 +92,13 @@ export function MyLeaveScreen() {
           </View>
           <TextField label="Start date" placeholder="YYYY-MM-DD" value={startsOn} onChangeText={setStartsOn} />
           <TextField label="End date (leave blank for one day)" placeholder="YYYY-MM-DD" value={endsOn} onChangeText={setEndsOn} />
-          <Button label={halfDay ? 'Half day ✓' : 'Mark as half day'} variant="ghost" size="sm" onPress={() => setHalfDay((v) => !v)} />
+          <Button
+            label={halfDay ? 'Half day' : 'Mark as half day'}
+            icon={halfDay ? 'checkmark' : undefined}
+            variant="ghost"
+            size="sm"
+            onPress={() => setHalfDay((v) => !v)}
+          />
           <TextField label="Reason" value={reason} onChangeText={setReason} multiline error={error ?? undefined} />
           <Button label="Submit request" onPress={() => void submit()} loading={submitting} />
         </Card>
@@ -137,6 +148,7 @@ export function MyLeaveScreen() {
         ) : (
           <EmptyState title="No leave requests yet" />
         )}
+      </View>
       </View>
     </Screen>
   );

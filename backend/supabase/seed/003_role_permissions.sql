@@ -16,11 +16,14 @@ on conflict do nothing;
 -- benefits disclose a family's financial circumstances) and does not
 -- include the vice-principal, unlike every other "as principal" grant in
 -- section 4.1's role table. A blanket "everything but two keys" mapping
--- would otherwise leak it.
+-- would otherwise leak it. attendance.reopen_staff is excluded too — a
+-- past staff-attendance date locks to principal only (section 15 open
+-- decision #1's follow-up), not "principal and vice_principal" like
+-- everything else here.
 insert into role_permissions (role_id, permission_key)
 select (select id from roles where key = 'vice_principal'), key
 from permissions
-where key not in ('leave.approve', 'audit.view', 'student.view_benefits')
+where key not in ('leave.approve', 'audit.view', 'student.view_benefits', 'attendance.reopen_staff')
 on conflict do nothing;
 
 -- sectional_head
@@ -73,6 +76,11 @@ from unnest(array[
   'announcement.publish_all',
   'account.manage',
   'attendance.amend_locked',
+  -- attendance.view_board so the staff tab of AttendanceBoard shows every
+  -- staff member's row (not just their own, per can_view_staff_attendance())
+  -- and attendance.mark_staff so they can act on what they see — section 15
+  -- open decision #1's admin/principal bulk-mark path.
+  'attendance.view_board', 'attendance.mark_staff',
   'leave.request'
 ]) as perm
 on conflict do nothing;

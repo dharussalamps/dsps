@@ -1,8 +1,8 @@
-import { useRoute, type RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { spacing, typography, semantic } from '@/theme/tokens';
@@ -15,6 +15,7 @@ const txnTypes: InventoryTransaction['txnType'][] = ['receipt', 'issue', 'return
 const signedDefault: Record<string, 1 | -1> = { receipt: 1, issue: -1, return: 1, write_off: -1, adjustment: 1 };
 
 export function InventoryItemScreen() {
+  const navigation = useNavigation();
   const { params } = useRoute<Route>();
   const staff = useAuthStore((s) => s.staff);
   const queryClient = useQueryClient();
@@ -50,25 +51,35 @@ export function InventoryItemScreen() {
 
   if (item.isLoading) {
     return (
-      <Screen>
+      <Screen padded={false} edges={['left', 'right']}>
+        <Hero>
+          <ScreenHeader title="Item" tone="onPrimary" back={navigation.canGoBack()} />
+        </Hero>
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
       </Screen>
     );
   }
   if (!item.data) {
     return (
-      <Screen>
-        <EmptyState title="Item not found" />
+      <Screen padded={false} edges={['left', 'right']}>
+        <Hero>
+          <ScreenHeader title="Item" tone="onPrimary" back={navigation.canGoBack()} />
+        </Hero>
+        <View style={{ padding: spacing.lg }}>
+          <EmptyState title="Item not found" />
+        </View>
       </Screen>
     );
   }
 
   return (
-    <Screen>
-      <ScreenHeader title={item.data.name} subtitle={item.data.category}>
-        <StatusPill label={`${item.data.quantity} in stock`} tone={item.data.lowStock ? 'error' : 'success'} />
-      </ScreenHeader>
-
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title={item.data.name} subtitle={item.data.category} tone="onPrimary" back={navigation.canGoBack()}>
+          <StatusPill label={`${item.data.quantity} in stock`} tone={item.data.lowStock ? 'error' : 'success'} />
+        </ScreenHeader>
+      </Hero>
+      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
       <Card>
         <Row label="Location" value={item.data.location ?? '—'} />
         <Row label="Condition" value={item.data.condition ?? '—'} />
@@ -100,6 +111,7 @@ export function InventoryItemScreen() {
             {t.note ? <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{t.note}</Text> : null}
           </Card>
         ))}
+      </View>
       </View>
     </Screen>
   );

@@ -5,6 +5,8 @@ insert into permissions (key, description) values
   ('attendance.remind',            'Send a reminder to unmarked classes in scope'),
   ('attendance.amend_locked',      'Edit attendance after its edit window has closed'),
   ('attendance.early_leave',       'Record a student leaving before the school day ends'),
+  ('attendance.mark_staff',        'Mark another staff member''s daily attendance'),
+  ('attendance.reopen_staff',      'Reopen a past date''s staff attendance for editing by others'),
   ('student.view_basic',           'View a student''s name, class and photo'),
   ('student.view_full',            'View a student''s full profile'),
   ('student.view_benefits',        'View a student''s benefit records'),

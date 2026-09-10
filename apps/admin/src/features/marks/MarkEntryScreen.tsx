@@ -2,8 +2,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
-import { Button, EmptyState, ScreenHeader, StatusPill, TextField } from '@/components';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button, EmptyState, Hero, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { semantic, spacing, typography } from '@/theme/tokens';
@@ -71,27 +70,32 @@ export function MarkEntryScreen() {
 
   if (loading || !sheet) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={semantic.primary} />
-      </SafeAreaView>
+      <Screen padded={false} edges={['left', 'right']}>
+        <Hero>
+          <ScreenHeader title="Enter marks" tone="onPrimary" back={navigation.canGoBack()} />
+        </Hero>
+        <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
+      </Screen>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background }} edges={['top', 'left', 'right']}>
-      <View style={{ padding: spacing.lg, gap: spacing.sm }}>
-        <ScreenHeader title="Enter marks" subtitle={`Out of ${sheet.maxScore}`}>
+    <Screen scroll={false} padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Enter marks" subtitle={`Out of ${sheet.maxScore}`} tone="onPrimary" back={navigation.canGoBack()}>
           <StatusPill label={sheet.status} tone={isDraft ? 'gold' : 'success'} />
         </ScreenHeader>
-      </View>
+      </Hero>
 
       {order.length === 0 ? (
-        <EmptyState title="No students in this class" />
+        <View style={{ padding: spacing.lg }}>
+          <EmptyState title="No students in this class" />
+        </View>
       ) : (
         <FlatList
           data={order}
           keyExtractor={(id) => id}
-          contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm, paddingBottom: 120 }}
+          contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm, paddingBottom: 120 }}
           renderItem={({ item: studentId }) => (
             <View
               style={{
@@ -135,6 +139,6 @@ export function MarkEntryScreen() {
           <Button label="Submit and lock" onPress={() => void submit()} loading={submitting} />
         </View>
       ) : null}
-    </SafeAreaView>
+    </Screen>
   );
 }

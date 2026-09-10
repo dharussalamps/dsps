@@ -3,7 +3,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
-import { Button, Card, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { Button, Card, Hero, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
 import { spacing, typography, semantic } from '@/theme/tokens';
 import { approveLeave, rejectLeave } from './api';
@@ -26,15 +26,21 @@ export function LeaveRequestDetailScreen() {
 
   if (detail.isLoading) {
     return (
-      <Screen>
+      <Screen padded={false} edges={['left', 'right']}>
+        <Hero>
+          <ScreenHeader title="Leave request" tone="onPrimary" back={navigation.canGoBack()} />
+        </Hero>
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
       </Screen>
     );
   }
   if (!detail.data) {
     return (
-      <Screen>
-        <Text style={{ ...typography.body, color: semantic.textSecondary }}>Request not found.</Text>
+      <Screen padded={false} edges={['left', 'right']}>
+        <Hero>
+          <ScreenHeader title="Leave request" tone="onPrimary" back={navigation.canGoBack()} />
+        </Hero>
+        <Text style={{ ...typography.body, color: semantic.textSecondary, padding: spacing.lg }}>Request not found.</Text>
       </Screen>
     );
   }
@@ -74,10 +80,13 @@ export function LeaveRequestDetailScreen() {
   }
 
   return (
-    <Screen>
-      <ScreenHeader title={d.staffName} subtitle={d.leaveTypeName}>
-        <StatusPill label={d.status} tone={d.status === 'pending' ? 'warning' : 'neutral'} />
-      </ScreenHeader>
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title={d.staffName} subtitle={d.leaveTypeName} tone="onPrimary" back={navigation.canGoBack()}>
+          <StatusPill label={d.status} tone={d.status === 'pending' ? 'warning' : 'neutral'} />
+        </ScreenHeader>
+      </Hero>
+      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
 
       <Card>
         <Text style={{ ...typography.body, color: semantic.textPrimary }}>
@@ -122,7 +131,8 @@ export function LeaveRequestDetailScreen() {
                 ))}
               </View>
               <Button
-                label={coverNotNeeded ? 'No cover needed ✓' : 'No cover needed'}
+                label="No cover needed"
+                icon={coverNotNeeded ? 'checkmark' : undefined}
                 variant="ghost"
                 size="sm"
                 onPress={() => {
@@ -144,6 +154,7 @@ export function LeaveRequestDetailScreen() {
           </Card>
         </>
       ) : null}
+      </View>
     </Screen>
   );
 }

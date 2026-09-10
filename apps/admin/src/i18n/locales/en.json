@@ -24,14 +24,13 @@
     "passwordMismatch": "Passwords don't match.",
     "passwordTooShort": "Use at least 8 characters.",
     "resetTitle": "Reset your password",
-    "resetHint": "Enter the phone number on your staff record — we'll text you a code.",
-    "phone": "Phone number",
+    "resetHint": "Enter the email on your staff record — we'll email you a code.",
     "sendCode": "Send code",
     "resetCodeSentHint": "Enter the code we sent, then choose a new password.",
     "code": "Verification code",
     "verifyAndContinue": "Verify and continue",
     "backToSignIn": "Back to sign in",
-    "resetError": "Couldn't send that code. Check the phone number and try again.",
+    "resetError": "Couldn't send that code. Check the email and try again.",
     "verifyError": "That code didn't work. Check it and try again."
   },
   "nav": {
@@ -39,6 +38,7 @@
     "students": "Students",
     "attendance": "Attendance",
     "announcements": "Announcements",
+    "staff": "Staff",
     "more": "More"
   },
   "home": {

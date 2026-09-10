@@ -1,7 +1,8 @@
+import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Alert, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, TextField } from '@/components';
 import { useAcademicYears } from '@/features/calendar/hooks';
 import { listStaff, type StaffSummary } from '@/features/staff/api';
 import { spacing, typography, semantic } from '@/theme/tokens';
@@ -17,6 +18,7 @@ import { useClassSubjectTeachers, useClassesForCurrentYear, useGrades, useSubjec
  * subject to which class (class_subject_teachers — FR-MRK-01).
  */
 export function AcademicStructureScreen() {
+  const navigation = useNavigation();
   const grades = useGrades();
   const subjects = useSubjects();
   const classes = useClassesForCurrentYear();
@@ -26,8 +28,11 @@ export function AcademicStructureScreen() {
   const currentYear = years.data?.find((y) => y.isCurrent) ?? years.data?.[0];
 
   return (
-    <Screen>
-      <ScreenHeader title="Classes, subjects & terms" subtitle="Grades, classes, subjects and who teaches what" />
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Classes, subjects & terms" subtitle="Grades, classes, subjects and who teaches what" tone="onPrimary" back={navigation.canGoBack()} />
+      </Hero>
+      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
 
       <GradesSection grades={grades.data ?? []} onChanged={() => queryClient.invalidateQueries({ queryKey: ['academicStructure', 'grades'] })} />
 
@@ -50,6 +55,7 @@ export function AcademicStructureScreen() {
         subjects={subjects.data ?? []}
         onChanged={() => queryClient.invalidateQueries({ queryKey: ['academicStructure', 'class-subject-teachers'] })}
       />
+      </View>
     </Screen>
   );
 }

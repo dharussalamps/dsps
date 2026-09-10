@@ -3,9 +3,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
-import { Button, Card, EmptyState, ScreenHeader, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, TextField } from '@/components';
 import { listStaff, type StaffSummary } from '@/features/staff/api';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { semantic, spacing, typography } from '@/theme/tokens';
@@ -91,12 +90,14 @@ export function EventCalendarScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background }} edges={['top', 'left', 'right']}>
-      <View style={{ padding: spacing.lg, gap: spacing.md }}>
-        <ScreenHeader title="Events">
-          <Button label={adding ? 'Cancel' : 'Add event'} size="sm" onPress={() => setAdding((v) => !v)} />
+    <Screen scroll={false} padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Events" tone="onPrimary" back={navigation.canGoBack()}>
+          <Button label={adding ? 'Cancel' : 'Add event'} icon={adding ? 'close' : 'add'} size="sm" variant="secondary" onPress={() => setAdding((v) => !v)} />
         </ScreenHeader>
+      </Hero>
 
+      <View style={{ padding: spacing.lg, gap: spacing.md }}>
         {adding ? (
           <Card>
             <TextField label="Title" value={title} onChangeText={setTitle} />
@@ -124,11 +125,11 @@ export function EventCalendarScreen() {
           </Card>
         ) : (
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Button label="← Prev" size="sm" variant="ghost" onPress={() => shiftMonth(-1)} />
+            <Button label="Prev" icon="chevron-back" size="sm" variant="ghost" onPress={() => shiftMonth(-1)} />
             <Text style={{ ...typography.subtitle, color: semantic.textPrimary }}>
               {new Date(year, month - 1).toLocaleString([], { month: 'long', year: 'numeric' })}
             </Text>
-            <Button label="Next →" size="sm" variant="ghost" onPress={() => shiftMonth(1)} />
+            <Button label="Next" icon="chevron-forward" iconPosition="right" size="sm" variant="ghost" onPress={() => shiftMonth(1)} />
           </View>
         )}
       </View>
@@ -152,6 +153,6 @@ export function EventCalendarScreen() {
           )}
         />
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }

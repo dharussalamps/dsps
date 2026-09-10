@@ -3,10 +3,9 @@ import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
-import { Button, Card, EmptyState, ScreenHeader, StatusPill, SyncStatusBadge } from '@/components';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill, SyncStatusBadge } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
-import { semantic, spacing, typography } from '@/theme/tokens';
+import { colors, semantic, spacing, typography } from '@/theme/tokens';
 import { remindUnmarkedClass, remindUnmarkedClassesBulk } from './api';
 import { todayIso, useMarkingStatus, useStaffAttendanceToday } from './hooks';
 
@@ -34,22 +33,49 @@ export function AttendanceBoardScreen() {
   const [tab, setTab] = useState<Tab>('students');
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background }} edges={['top', 'left', 'right']}>
-      <View style={{ padding: spacing.lg, gap: spacing.md }}>
-        <ScreenHeader title="Attendance board" />
-        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <Button label="Classes" size="sm" variant={tab === 'students' ? 'primary' : 'outline'} onPress={() => setTab('students')} />
-          <Button label="Staff" size="sm" variant={tab === 'staff' ? 'primary' : 'outline'} onPress={() => setTab('staff')} />
+    <Screen scroll={false} padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Attendance board" tone="onPrimary" />
+        <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'center' }}>
+          <Button
+            label="Classes"
+            icon="school-outline"
+            size="sm"
+            variant={tab === 'students' ? 'secondary' : 'outline'}
+            textColor={tab === 'students' ? undefined : colors.white}
+            style={tab === 'students' ? undefined : { borderColor: 'rgba(255,255,255,0.6)' }}
+            onPress={() => setTab('students')}
+          />
+          <Button
+            label="Staff"
+            icon="people-outline"
+            size="sm"
+            variant={tab === 'staff' ? 'secondary' : 'outline'}
+            textColor={tab === 'staff' ? undefined : colors.white}
+            style={tab === 'staff' ? undefined : { borderColor: 'rgba(255,255,255,0.6)' }}
+            onPress={() => setTab('staff')}
+          />
         </View>
+        {tab === 'staff' ? (
+          <Button
+            label="Staff attendance"
+            icon="checkmark-circle-outline"
+            size="sm"
+            variant="outline"
+            textColor={colors.white}
+            style={{ borderColor: 'rgba(255,255,255,0.6)', alignSelf: 'flex-start' }}
+            onPress={() => navigation.navigate('MarkStaffAttendance')}
+          />
+        ) : null}
         <SyncStatusBadge />
-      </View>
+      </Hero>
 
       {tab === 'students' ? (
         <ClassBoard onDate={onDate} onOpenClass={(classId) => navigation.navigate('ClassDetail', { classId })} />
       ) : (
         <StaffBoard onDate={onDate} />
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }
 

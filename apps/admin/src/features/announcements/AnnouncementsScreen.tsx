@@ -2,8 +2,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Alert, FlatList, Text, View } from 'react-native';
-import { Button, Card, EmptyState, ScreenHeader, StatusPill } from '@/components';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { semantic, spacing, typography } from '@/theme/tokens';
@@ -25,12 +24,12 @@ export function AnnouncementsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background }} edges={['top', 'left', 'right']}>
-      <View style={{ padding: spacing.lg, gap: spacing.md }}>
-        <ScreenHeader title="Announcements">
-          <Button label="New" size="sm" onPress={() => navigation.navigate('ComposeAnnouncement')} />
+    <Screen scroll={false} padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Announcements" tone="onPrimary">
+          <Button label="New" icon="add" size="sm" variant="secondary" onPress={() => navigation.navigate('ComposeAnnouncement')} />
         </ScreenHeader>
-      </View>
+      </Hero>
 
       {announcements.isLoading ? (
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
@@ -64,7 +63,7 @@ export function AnnouncementsScreen() {
           )}
         />
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }
 

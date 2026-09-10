@@ -11,6 +11,8 @@ export type StaffProfile = {
   id: string;
   fullName: string;
   staffNo: string;
+  /** 'YYYY-MM-DD', or null if never set — powers the Home screen's birthday greeting. */
+  birthDate: string | null;
 };
 
 /**
@@ -90,14 +92,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   refreshStaffProfile: async () => {
     const { data, error } = await supabase
       .from('staff')
-      .select('id, full_name, staff_no')
+      .select('id, full_name, staff_no, birth_date')
       .eq('auth_user_id', get().session?.user.id)
       .maybeSingle();
     if (error || !data) {
       set({ staff: null });
       return;
     }
-    set({ staff: { id: data.id, fullName: data.full_name, staffNo: data.staff_no } });
+    set({ staff: { id: data.id, fullName: data.full_name, staffNo: data.staff_no, birthDate: data.birth_date } });
   },
 }));
 

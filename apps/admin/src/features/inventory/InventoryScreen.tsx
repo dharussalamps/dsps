@@ -3,10 +3,9 @@ import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
-import { Button, Card, EmptyState, ScreenHeader, StatusPill, TextField } from '@/components';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
-import { semantic, spacing, typography } from '@/theme/tokens';
+import { colors, semantic, spacing, typography } from '@/theme/tokens';
 import { createInventoryItem } from './api';
 import { useInventoryItems } from './hooks';
 
@@ -53,12 +52,24 @@ export function InventoryScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background }} edges={['top', 'left', 'right']}>
-      <View style={{ padding: spacing.lg, gap: spacing.md }}>
-        <ScreenHeader title="Inventory">
-          <Button label={adding ? 'Cancel' : 'Add item'} size="sm" onPress={() => setAdding((v) => !v)} />
+    <Screen scroll={false} padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Inventory" tone="onPrimary" back={navigation.canGoBack()}>
+          <Button label={adding ? 'Cancel' : 'Add item'} icon={adding ? 'close' : 'add'} size="sm" variant="secondary" onPress={() => setAdding((v) => !v)} />
         </ScreenHeader>
-        {adding ? (
+        {!adding ? (
+          <TextField
+            placeholder="Search by name, category or code"
+            value={query}
+            onChangeText={setQuery}
+            autoCapitalize="none"
+            style={{ backgroundColor: colors.white, borderWidth: 0 }}
+          />
+        ) : null}
+      </Hero>
+
+      {adding ? (
+        <View style={{ padding: spacing.lg, paddingBottom: 0 }}>
           <Card>
             <TextField label="Name" value={name} onChangeText={setName} />
             <TextField label="Category" value={category} onChangeText={setCategory} />
@@ -68,10 +79,8 @@ export function InventoryScreen() {
             <TextField label="Minimum quantity" value={minQuantity} onChangeText={setMinQuantity} keyboardType="numeric" />
             <Button label="Save" onPress={() => void submit()} loading={saving} />
           </Card>
-        ) : (
-          <TextField placeholder="Search by name, category or code" value={query} onChangeText={setQuery} autoCapitalize="none" />
-        )}
-      </View>
+        </View>
+      ) : null}
 
       {items.isLoading ? (
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
@@ -79,7 +88,7 @@ export function InventoryScreen() {
         <FlatList
           data={items.data ?? []}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm, paddingBottom: spacing.xl }}
+          contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}
           ListEmptyComponent={<EmptyState title="No items" />}
           renderItem={({ item }) => (
             <Card onPress={() => navigation.navigate('InventoryItem', { itemId: item.id })} flat>
@@ -97,6 +106,6 @@ export function InventoryScreen() {
           )}
         />
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }

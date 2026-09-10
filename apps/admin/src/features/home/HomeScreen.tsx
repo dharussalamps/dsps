@@ -1,9 +1,10 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { ActivityIndicator, Alert, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { useRef, useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import { DrawerLayout } from 'react-native-gesture-handler';
+import { Avatar, Button, Card, EmptyState, Hero, Icon, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
 import { fetchStudentsAtRisk } from '@/features/analytics/api';
 import { remindUnmarkedClassesBulk } from '@/features/attendance/api';
 import { todayIso, useMarkingStatus, useStaffAttendanceToday } from '@/features/attendance/hooks';
@@ -16,11 +17,26 @@ import { fetchResponsibilitiesForStaff } from '@/features/staff/api';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { colors, semantic, spacing, typography } from '@/theme/tokens';
-import { CheckInCard } from './CheckInCard';
+import { DataEntryDrawerContent } from './DataEntryDrawer';
 import { useClassesNeedingCover, useMyClasses, useIsSchoolDayToday } from './hooks';
 import { MyClassAttendanceCard } from './MyClassAttendanceCard';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+/** Replaces the header's name subtitle with something contextual — a birthday beats the time-of-day greeting when both apply. */
+function getGreeting(now: Date, birthDate?: string | null): { title: string; subtitle: string } {
+  if (birthDate) {
+    const [, month, day] = birthDate.split('-').map(Number);
+    if (month === now.getMonth() + 1 && day === now.getDate()) {
+      return { title: 'Happy birthday! 🎉', subtitle: 'Wishing you a wonderful day.' };
+    }
+  }
+  const hour = now.getHours();
+  if (hour >= 5 && hour < 12) return { title: 'Good morning', subtitle: 'Have a nice day.' };
+  if (hour >= 12 && hour < 17) return { title: 'Good afternoon', subtitle: 'Have a nice day.' };
+  if (hour >= 17 && hour < 21) return { title: 'Good evening', subtitle: 'Have a nice day.' };
+  return { title: 'Good night', subtitle: 'Have a nice day.' };
+}
 
 /**
  * AdminSpec.md section 10, Home composition. Every block below is shown
@@ -32,11 +48,12 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
  */
 export function HomeScreen() {
   const navigation = useNavigation<Nav>();
+  const drawerRef = useRef<DrawerLayout>(null);
   const staff = useAuthStore((s) => s.staff);
-  const signOut = useAuthStore((s) => s.signOut);
   const isSchoolDay = useIsSchoolDayToday();
   const myClasses = useMyClasses(staff?.id);
   const onDate = todayIso();
+  const greeting = getGreeting(new Date(), staff?.birthDate);
 
   const marking = useMarkingStatus(onDate);
   const staffBoard = useStaffAttendanceToday(onDate);
@@ -68,66 +85,100 @@ export function HomeScreen() {
   const totalStaff = staffBoard.data?.length ?? 0;
 
   return (
-    <Screen>
-      <ScreenHeader title="Home" subtitle={staff ? `Hello, ${staff.fullName}` : undefined}>
-        <Button label="Sign out" variant="ghost" size="sm" onPress={() => void signOut()} />
-      </ScreenHeader>
-
-      {loading ? (
-        <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
-      ) : !isSchoolDay.data ? (
-        <EmptyState title="Not a school day" message="Attendance marking opens on the next school day." />
-      ) : (
-        <View style={{ gap: spacing.md }}>
-          {myClasses.data?.map((c) => (
-            <MyClassAttendanceCard key={c.classId} myClass={c} />
-          ))}
-          {staff ? <CheckInCard staffId={staff.id} /> : null}
-        </View>
+    <DrawerLayout
+      ref={drawerRef}
+      drawerWidth={280}
+      drawerPosition="left"
+      renderNavigationView={() => (
+        <DataEntryDrawerContent navigation={navigation} onClose={() => drawerRef.current?.closeDrawer()} />
       )}
+    >
+      <Screen padded={false} edges={['left', 'right']}>
+        <Hero>
+          <ScreenHeader
+            title={greeting.title}
+            subtitle={greeting.subtitle}
+            onMenuPress={() => drawerRef.current?.openDrawer()}
+            tone="onPrimary"
+          >
+            {staff ? (
+              <Avatar
+                name={staff.fullName}
+                tone="onPrimary"
+                size={32}
+                onPress={() => navigation.navigate('StaffProfile', { staffId: staff.id })}
+              />
+            ) : null}
+          </ScreenHeader>
 
-      {unmarked.length > 0 ? <UnmarkedClassesCard classes={unmarked} onDate={onDate} /> : null}
+          {loading ? (
+            <ActivityIndicator color={colors.white} style={{ marginTop: spacing.xl }} />
+          ) : !isSchoolDay.data ? (
+            <Card style={{ marginTop: spacing.lg }}>
+              <EmptyState title="Not a school day" message="Attendance marking opens on the next school day." />
+            </Card>
+          ) : (
+            <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
+              {myClasses.data?.map((c) => (
+                <MyClassAttendanceCard key={c.classId} myClass={c} />
+              ))}
+            </View>
+          )}
+        </Hero>
 
-      {totalStaff > 0 || pendingLeave.data?.length ? (
-        <Card>
-          <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>SCHOOL PULSE</Text>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingVertical: spacing.sm }}>
-            {totalStaff > 0 ? <Metric label="Staff present" value={`${presentStaff}/${totalStaff}`} /> : null}
-            <Metric label="Approvals pending" value={String(pendingLeave.data?.length ?? 0)} onPress={() => navigation.navigate('LeaveRequests')} />
-          </View>
-        </Card>
-      ) : null}
+        <View style={styles.body}>
+          {unmarked.length > 0 ? <UnmarkedClassesCard classes={unmarked} onDate={onDate} /> : null}
 
-      <NeedsAttention
-        pendingLeaveCount={pendingLeave.data?.length ?? 0}
-        atRiskCount={atRisk.data?.length ?? 0}
-        needsCoverCount={needsCover.data?.length ?? 0}
-        lowStockCount={lowStock.data?.length ?? 0}
-        outstandingSheetsCount={outstandingSheets.data?.length ?? 0}
-        onNavigate={navigation.navigate}
-      />
+          {totalStaff > 0 || pendingLeave.data?.length ? (
+            <Card>
+              <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>SCHOOL PULSE</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingVertical: spacing.sm }}>
+                {totalStaff > 0 ? <Metric label="Staff present" value={`${presentStaff}/${totalStaff}`} /> : null}
+                <Metric label="Approvals pending" value={String(pendingLeave.data?.length ?? 0)} onPress={() => navigation.navigate('LeaveRequests')} />
+              </View>
+            </Card>
+          ) : null}
 
-      {(myDuties.data?.length ?? 0) > 0 || (todaysEvents.data?.length ?? 0) > 0 ? (
-        <Card>
-          <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>TODAY</Text>
-          {myDuties.data?.map((d) => (
-            <Text key={d.id} style={{ ...typography.body, color: semantic.textPrimary, paddingVertical: spacing.xs }}>
-              {d.title}
-              {d.scheduleNote ? ` · ${d.scheduleNote}` : ''}
-            </Text>
-          ))}
-          {todaysEvents.data?.map((e) => (
-            <Text key={e.id} style={{ ...typography.body, color: semantic.textPrimary, paddingVertical: spacing.xs }}>
-              📅 {e.title}
-            </Text>
-          ))}
-        </Card>
-      ) : null}
+          <NeedsAttention
+            pendingLeaveCount={pendingLeave.data?.length ?? 0}
+            atRiskCount={atRisk.data?.length ?? 0}
+            needsCoverCount={needsCover.data?.length ?? 0}
+            lowStockCount={lowStock.data?.length ?? 0}
+            outstandingSheetsCount={outstandingSheets.data?.length ?? 0}
+            onNavigate={navigation.navigate}
+          />
 
-      <QuickActions />
-    </Screen>
+          {(myDuties.data?.length ?? 0) > 0 || (todaysEvents.data?.length ?? 0) > 0 ? (
+            <Card>
+              <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>TODAY</Text>
+              {myDuties.data?.map((d) => (
+                <Text key={d.id} style={{ ...typography.body, color: semantic.textPrimary, paddingVertical: spacing.xs }}>
+                  {d.title}
+                  {d.scheduleNote ? ` · ${d.scheduleNote}` : ''}
+                </Text>
+              ))}
+              {todaysEvents.data?.map((e) => (
+                <View
+                  key={e.id}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.xs }}
+                >
+                  <Icon name="calendar-outline" size={16} color={semantic.textPrimary} />
+                  <Text style={{ ...typography.body, color: semantic.textPrimary }}>{e.title}</Text>
+                </View>
+              ))}
+            </Card>
+          ) : null}
+
+          <QuickActions />
+        </View>
+      </Screen>
+    </DrawerLayout>
   );
 }
+
+const styles = StyleSheet.create({
+  body: { padding: spacing.lg, gap: spacing.lg },
+});
 
 function Metric({ label, value, onPress }: { label: string; value: string; onPress?: () => void }) {
   return (

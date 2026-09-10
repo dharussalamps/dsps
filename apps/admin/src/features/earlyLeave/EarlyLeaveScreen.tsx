@@ -1,9 +1,9 @@
-import { useRoute, type RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, TextField } from '@/components';
 import { useStudentsInClass } from '@/features/students/hooks';
 import type { RootStackParamList } from '@/navigation/types';
 import { semantic, spacing, typography } from '@/theme/tokens';
@@ -12,6 +12,7 @@ import { listEarlyLeavesToday, recordEarlyLeave } from './api';
 type Route = RouteProp<RootStackParamList, 'EarlyLeave'>;
 
 export function EarlyLeaveScreen() {
+  const navigation = useNavigation();
   const { params } = useRoute<Route>();
   const classId = params.classId;
   const onDate = format(new Date(), 'yyyy-MM-dd');
@@ -52,12 +53,14 @@ export function EarlyLeaveScreen() {
   }
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Early leave" subtitle={onDate} tone="onPrimary" back={navigation.canGoBack()} />
+      </Hero>
       <FlatList
         data={roster.data ?? []}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}
-        ListHeaderComponent={<ScreenHeader title="Early leave" subtitle={onDate} />}
         ListEmptyComponent={
           roster.isLoading ? (
             <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />

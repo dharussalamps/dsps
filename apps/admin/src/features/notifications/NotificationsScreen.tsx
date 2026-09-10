@@ -1,7 +1,8 @@
+import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { Pressable, Text, View } from 'react-native';
-import { Button, EmptyState, Screen, ScreenHeader } from '@/components';
+import { Button, EmptyState, Hero, Screen, ScreenHeader } from '@/components';
 import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
 import { markAllNotificationsRead, markNotificationRead, type NotificationRow } from './api';
 import { useMyNotifications } from './hooks';
@@ -15,6 +16,7 @@ import { useMyNotifications } from './hooks';
  * ("these jobs write rows to the in-app notification center").
  */
 export function NotificationsScreen() {
+  const navigation = useNavigation();
   const notifications = useMyNotifications();
   const queryClient = useQueryClient();
 
@@ -32,10 +34,13 @@ export function NotificationsScreen() {
   const hasUnread = (notifications.data ?? []).some((n) => !n.readAt);
 
   return (
-    <Screen>
-      <ScreenHeader title="Notifications">
-        {hasUnread ? <Button label="Mark all read" size="sm" variant="ghost" onPress={() => void markAll()} /> : null}
-      </ScreenHeader>
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Notifications" tone="onPrimary" back={navigation.canGoBack()}>
+          {hasUnread ? <Button label="Mark all read" size="sm" variant="secondary" onPress={() => void markAll()} /> : null}
+        </ScreenHeader>
+      </Hero>
+      <View style={{ padding: spacing.lg, gap: spacing.sm }}>
 
       {notifications.data && notifications.data.length === 0 ? (
         <EmptyState title="Nothing yet" message="Reminders, leave decisions, and other alerts will appear here." />
@@ -65,6 +70,7 @@ export function NotificationsScreen() {
           </View>
         </Pressable>
       ))}
+      </View>
     </Screen>
   );
 }

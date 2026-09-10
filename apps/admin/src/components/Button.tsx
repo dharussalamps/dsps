@@ -1,5 +1,6 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
 import { minTapTarget, radius, semantic, spacing, typography } from '@/theme/tokens';
+import { Icon, type IconName } from './Icon';
 
 type Variant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 type Size = 'md' | 'sm';
@@ -11,6 +12,13 @@ type Props = {
   size?: Size;
   disabled?: boolean;
   loading?: boolean;
+  /** Flat icon shown alongside the label — e.g. a checkmark for a toggled-on state. */
+  icon?: IconName;
+  iconPosition?: 'left' | 'right';
+  /** Defaults to `label` — set this when label is empty (icon-only buttons). */
+  accessibilityLabel?: string;
+  /** Overrides the variant's default text/icon color — e.g. white for a button placed on a colored background. */
+  textColor?: string;
   style?: ViewStyle;
   testID?: string;
 };
@@ -22,14 +30,22 @@ export function Button({
   size = 'md',
   disabled,
   loading,
+  icon,
+  iconPosition = 'left',
+  accessibilityLabel,
+  textColor,
   style,
   testID,
 }: Props) {
   const isDisabled = disabled || loading;
+  const iconSize = size === 'sm' ? 15 : 17;
+  const resolvedTextColor = textColor ?? variantStyles[variant].text.color;
+  const iconEl = icon ? <Icon name={icon} size={iconSize} color={resolvedTextColor} /> : null;
 
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: isDisabled }}
       testID={testID}
       onPress={onPress}
@@ -44,11 +60,24 @@ export function Button({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variantStyles[variant].text.color as string} />
+        <ActivityIndicator color={resolvedTextColor} />
       ) : (
-        <Text style={[styles.label, variantStyles[variant].text, size === 'sm' && styles.labelSm]}>
-          {label}
-        </Text>
+        <>
+          {iconPosition === 'left' ? iconEl : null}
+          {label ? (
+            <Text
+              style={[
+                styles.label,
+                variantStyles[variant].text,
+                textColor ? { color: textColor } : null,
+                size === 'sm' && styles.labelSm,
+              ]}
+            >
+              {label}
+            </Text>
+          ) : null}
+          {iconPosition === 'right' ? iconEl : null}
+        </>
       )}
     </Pressable>
   );
@@ -62,6 +91,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
+    gap: spacing.xs,
   },
   sm: { minHeight: 36, paddingHorizontal: spacing.md },
   label: { ...typography.bodyStrong },

@@ -2,7 +2,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
-import { Button, Card, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, Hero, Screen, ScreenHeader, TextField } from '@/components';
 import { useClassesForCurrentYear } from '@/features/academicStructure/hooks';
 import { listStaff, type StaffSummary } from '@/features/staff/api';
 import type { RootStackParamList } from '@/navigation/types';
@@ -48,8 +48,11 @@ export function AssignCoverScreen() {
   }
 
   return (
-    <Screen>
-      <ScreenHeader title="Assign cover teacher" subtitle="Grants class-teacher rights for a date range" />
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Assign cover teacher" subtitle="Grants class-teacher rights for a date range" tone="onPrimary" back={navigation.canGoBack()} />
+      </Hero>
+      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
 
       <Card>
         <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>CLASS</Text>
@@ -79,6 +82,7 @@ export function AssignCoverScreen() {
 
       {error ? <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{error}</Text> : null}
       <Button label="Assign cover" onPress={() => void save()} loading={busy} disabled={!classId || !staff || !startsOn.trim() || !endsOn.trim()} />
+      </View>
     </Screen>
   );
 }

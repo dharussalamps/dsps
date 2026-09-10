@@ -128,6 +128,47 @@ export async function checkInSelf(): Promise<void> {
   if (error) throw error;
 }
 
+/** Same is_school_day() RPC as Home's "today" check (features/home/api.ts), but for any date — MarkStaffAttendance needs it for whichever date is selected, not just today. */
+export async function fetchIsSchoolDay(onDate: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('is_school_day', { p_date: onDate });
+  if (error) throw error;
+  return Boolean(data);
+}
+
+/** section 15 open decision #1: admin/principal bulk-mark the whole staff board in one call, via attendance.mark_staff. */
+export async function markStaffAttendanceBulk(
+  onDate: string,
+  entries: { staffId: string; status: Exclude<StaffAttendanceRow['status'], 'not_checked_in'> }[],
+): Promise<void> {
+  const { error } = await supabase.rpc('mark_staff_attendance_bulk', {
+    p_on_date: onDate,
+    p_entries: entries.map((e) => ({ staff_id: e.staffId, status: e.status })),
+  });
+  if (error) throw error;
+}
+
+export type StaffAttendanceReopen = { reopenedByName: string; reopenedAt: string };
+
+/** Whether a past date's staff attendance has been unlocked — null means still locked to attendance.reopen_staff holders (principal) only. */
+export async function fetchStaffAttendanceReopen(onDate: string): Promise<StaffAttendanceReopen | null> {
+  const { data, error } = await supabase.from('staff_attendance_reopens').select('reopened_at, staff(full_name)').eq('on_date', onDate).maybeSingle();
+  if (error) throw error;
+  const row = data as unknown as { reopened_at: string; staff: { full_name: string } | null } | null;
+  return row ? { reopenedByName: row.staff?.full_name ?? 'Unknown', reopenedAt: row.reopened_at } : null;
+}
+
+/** attendance.reopen_staff (principal only) — unlocks a past date so attendance.mark_staff holders without that permission can edit it too. */
+export async function reopenStaffAttendanceDay(onDate: string): Promise<void> {
+  const { error } = await supabase.rpc('reopen_staff_attendance_day', { p_on_date: onDate });
+  if (error) throw error;
+}
+
+/** attendance.reopen_staff (principal only) — locks a previously-reopened past date back up. */
+export async function closeStaffAttendanceDay(onDate: string): Promise<void> {
+  const { error } = await supabase.rpc('close_staff_attendance_day', { p_on_date: onDate });
+  if (error) throw error;
+}
+
 /** FR-ATT-12: reminds every unmarked class in the caller's scope in one action. Returns how many were actually reminded. */
 export async function remindUnmarkedClassesBulk(onDate: string): Promise<number> {
   const { data, error } = await supabase.rpc('remind_unmarked_classes_bulk', { p_on_date: onDate });

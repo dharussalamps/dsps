@@ -1,12 +1,13 @@
+import { useNavigation } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { useEffect, useState } from 'react';
 import { Alert, Platform, Text, View } from 'react-native';
-import { Button, Card, Screen, ScreenHeader, StatusPill } from '@/components';
+import { Button, Card, Hero, Screen, ScreenHeader, StatusPill } from '@/components';
 import { isBiometricAvailable, isBiometricUnlockEnabled, setBiometricUnlockEnabled } from '@/lib/biometrics';
 import { hasUnsyncedOperations } from '@/lib/offline';
 import { useAuthStore } from '@/store/authStore';
-import { semantic, typography } from '@/theme/tokens';
+import { semantic, spacing, typography } from '@/theme/tokens';
 import { registerDevice } from './api';
 
 /**
@@ -15,6 +16,7 @@ import { registerDevice } from './api';
  * infrastructure exists, but only one bundle ships).
  */
 export function SettingsScreen() {
+  const navigation = useNavigation();
   const staff = useAuthStore((s) => s.staff);
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
@@ -99,9 +101,12 @@ export function SettingsScreen() {
   }
 
   return (
-    <Screen>
-      <ScreenHeader title="Settings" />
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Settings" tone="onPrimary" back={navigation.canGoBack()} />
+      </Hero>
 
+      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
       <Card>
         <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>PROFILE</Text>
         <Row label="Name" value={staff?.fullName ?? '—'} />
@@ -125,7 +130,8 @@ export function SettingsScreen() {
         <Card>
           <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>SECURITY</Text>
           <Button
-            label={biometricEnabled ? 'Biometric unlock enabled ✓' : 'Enable biometric unlock'}
+            label={biometricEnabled ? 'Biometric unlock enabled' : 'Enable biometric unlock'}
+            icon={biometricEnabled ? 'checkmark' : undefined}
             variant={biometricEnabled ? 'outline' : 'primary'}
             onPress={() => void toggleBiometric()}
             loading={biometricBusy}
@@ -142,6 +148,7 @@ export function SettingsScreen() {
       </Card>
 
       <Button label="Sign out" variant="danger" onPress={() => void confirmSignOut()} loading={signingOut} />
+      </View>
     </Screen>
   );
 }

@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Card, TextField } from '@/components';
+import { pickCsvFile } from '@/lib/csvFile';
 import { supabase } from '@/lib/supabase';
 import { spacing, typography, semantic, colors } from '@/theme/tokens';
-
-type Entity = 'students' | 'staff';
 
 type ImportResult = {
   total: number;
@@ -13,27 +12,34 @@ type ImportResult = {
   results: { row_index: number; id: string; accepted: boolean; error: string | null }[];
 };
 
-const COLUMNS: Record<Entity, string> = {
-  students: 'admission_no, full_name, preferred_name, date_of_birth, class_name, guardian_name, guardian_relationship, guardian_phone',
-  staff: 'staff_no, full_name, phone, email, joined_on',
-};
+const COLUMNS = 'admission_no, full_name, preferred_name, date_of_birth, class_name, guardian_name, guardian_relationship, guardian_phone';
 
 /**
  * section 8/build task 5: spreadsheet import. Section 10's screen table
  * has no dedicated route for this — it's a one-time administrative
  * operation, not a regular navigation destination — so it's folded into
- * UserAccountsScreen (already account-management-scoped) rather than a
- * new route. No file picker is installed, so this pastes CSV text
- * directly. FR-ADM-06 (P1) names both students and staff — both are wired
- * here (see backend/supabase/functions/import-records for the shared
- * per-row-savepoint pattern each entity's RPC uses).
+ * StudentSearchScreen (already student-management-scoped) rather than a
+ * new route (see backend/supabase/functions/import-records for the shared
+ * per-row-savepoint pattern the RPC uses).
  */
 export function ImportStudentsSection() {
-  const [entity, setEntity] = useState<Entity>('students');
   const [csv, setCsv] = useState('');
+  const [fileName, setFileName] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  async function pickFile() {
+    setError(null);
+    try {
+      const picked = await pickCsvFile();
+      if (!picked) return;
+      setCsv(picked.content);
+      setFileName(picked.name);
+    } catch {
+      setError('Could not read that file. Try a different one.');
+    }
+  }
 
   async function submit() {
     if (!csv.trim()) return;
@@ -42,7 +48,7 @@ export function ImportStudentsSection() {
     setResult(null);
     try {
       const { data, error: fnError } = await supabase.functions.invoke<ImportResult>('import-records', {
-        body: { entity, csv },
+        body: { entity: 'students', csv },
       });
       if (fnError) throw fnError;
       setResult(data ?? null);
@@ -56,12 +62,25 @@ export function ImportStudentsSection() {
   return (
     <Card>
       <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>IMPORT (CSV)</Text>
-      <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-        <Button label="Students" size="sm" variant={entity === 'students' ? 'primary' : 'outline'} onPress={() => setEntity('students')} />
-        <Button label="Staff" size="sm" variant={entity === 'staff' ? 'primary' : 'outline'} onPress={() => setEntity('staff')} />
+      <Text style={{ ...typography.caption, color: semantic.textSecondary }}>Columns: {COLUMNS}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+        <Button label="Choose file" size="sm" variant="outline" onPress={() => void pickFile()} />
+        {fileName ? (
+          <Text style={{ ...typography.caption, color: semantic.textSecondary, flexShrink: 1 }} numberOfLines={1}>
+            {fileName}
+          </Text>
+        ) : null}
       </View>
-      <Text style={{ ...typography.caption, color: semantic.textSecondary }}>Columns: {COLUMNS[entity]}</Text>
-      <TextField placeholder="Paste CSV here, including the header row" value={csv} onChangeText={setCsv} multiline style={{ minHeight: 100 }} />
+      <TextField
+        placeholder="Or paste CSV here, including the header row"
+        value={csv}
+        onChangeText={(v) => {
+          setCsv(v);
+          setFileName(null);
+        }}
+        multiline
+        style={{ minHeight: 100 }}
+      />
       <Button label="Import" onPress={() => void submit()} loading={importing} disabled={!csv.trim()} />
 
       {error ? <Text style={{ ...typography.caption, color: colors.error }}>{error}</Text> : null}

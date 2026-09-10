@@ -1,7 +1,7 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { ActivityIndicator, FlatList, Text } from 'react-native';
-import { Card, EmptyState, Screen } from '@/components';
+import { Card, EmptyState, Hero, Screen, ScreenHeader } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
 import { semantic, spacing, typography } from '@/theme/tokens';
 import { useClasses } from './hooks';
@@ -13,7 +13,10 @@ export function ClassListScreen() {
   const classes = useClasses();
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Classes" tone="onPrimary" back={navigation.canGoBack()} />
+      </Hero>
       {classes.isLoading ? (
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
       ) : (

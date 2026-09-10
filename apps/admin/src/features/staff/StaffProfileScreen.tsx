@@ -1,7 +1,7 @@
-import { useRoute, type RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import { ActivityIndicator, Linking, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Screen, ScreenHeader, StatusPill } from '@/components';
+import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill } from '@/components';
 import { fetchMyLeaveRequests } from '@/features/leave/api';
 import { useCurrentYearTerms } from '@/features/calendar/hooks';
 import type { RootStackParamList } from '@/navigation/types';
@@ -28,6 +28,7 @@ const leaveStatusTone: Record<string, 'success' | 'warning' | 'error' | 'neutral
  * else in the app.
  */
 export function StaffProfileScreen() {
+  const navigation = useNavigation();
   const { params } = useRoute<Route>();
   const profile = useStaffProfile(params.staffId);
   const terms = useCurrentYearTerms();
@@ -40,7 +41,10 @@ export function StaffProfileScreen() {
 
   if (profile.isLoading) {
     return (
-      <Screen>
+      <Screen padded={false} edges={['left', 'right']}>
+        <Hero>
+          <ScreenHeader title="Staff profile" tone="onPrimary" back={navigation.canGoBack()} />
+        </Hero>
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
       </Screen>
     );
@@ -48,8 +52,13 @@ export function StaffProfileScreen() {
 
   if (!profile.data) {
     return (
-      <Screen>
-        <EmptyState title="Staff member not found" message="They may be outside what you have access to view." />
+      <Screen padded={false} edges={['left', 'right']}>
+        <Hero>
+          <ScreenHeader title="Staff profile" tone="onPrimary" back={navigation.canGoBack()} />
+        </Hero>
+        <View style={{ padding: spacing.lg }}>
+          <EmptyState title="Staff member not found" message="They may be outside what you have access to view." />
+        </View>
       </Screen>
     );
   }
@@ -57,10 +66,13 @@ export function StaffProfileScreen() {
   const s = profile.data;
 
   return (
-    <Screen>
-      <ScreenHeader title={s.fullName} subtitle={s.staffNo}>
-        {s.status !== 'active' ? <StatusPill label={s.status} tone="neutral" /> : null}
-      </ScreenHeader>
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title={s.fullName} subtitle={s.staffNo} tone="onPrimary" back={navigation.canGoBack()}>
+          {s.status !== 'active' ? <StatusPill label={s.status} tone="neutral" /> : null}
+        </ScreenHeader>
+      </Hero>
+      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
 
       <Card>
         <Button label={s.phone} variant="outline" onPress={() => Linking.openURL(`tel:${s.phone}`)} />
@@ -99,6 +111,7 @@ export function StaffProfileScreen() {
           ))}
         </Card>
       ) : null}
+      </View>
     </Screen>
   );
 }

@@ -2,7 +2,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery } from '@tanstack/react-query';
 import { Text, View } from 'react-native';
-import { Button, Card, EmptyState, Screen, ScreenHeader, StatusPill, SyncStatusBadge } from '@/components';
+import { Button, Card, EmptyState, Hero, Icon, Screen, ScreenHeader, StatusPill, SyncStatusBadge } from '@/components';
 import { GuardianCallButton } from '@/features/students/GuardianCallButton';
 import type { RootStackParamList } from '@/navigation/types';
 import { spacing, typography, semantic } from '@/theme/tokens';
@@ -36,16 +36,22 @@ export function AttendanceSubmittedScreen() {
   const confirmedByServer = existing.data != null;
 
   return (
-    <Screen>
-      <ScreenHeader title="Attendance submitted" subtitle={onDate}>
-        <StatusPill label={confirmedByServer ? 'Confirmed' : 'Saved on device'} tone={confirmedByServer ? 'success' : 'gold'} />
-      </ScreenHeader>
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Attendance submitted" subtitle={onDate} tone="onPrimary" back={navigation.canGoBack()}>
+          <StatusPill label={confirmedByServer ? 'Confirmed' : 'Saved on device'} tone={confirmedByServer ? 'success' : 'gold'} />
+        </ScreenHeader>
+      </Hero>
+      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
 
       <SyncStatusBadge />
 
       {absentees.length === 0 ? (
         <Card>
-          <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>Full attendance today 🎉</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+            <Icon name="ribbon-outline" size={18} color={semantic.textPrimary} />
+            <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>Full attendance today</Text>
+          </View>
         </Card>
       ) : (
         <View style={{ gap: spacing.sm }}>
@@ -84,6 +90,7 @@ export function AttendanceSubmittedScreen() {
       ) : (
         <Button label="Record early leave" variant="outline" onPress={() => navigation.navigate('EarlyLeave', { classId })} />
       )}
+      </View>
     </Screen>
   );
 }

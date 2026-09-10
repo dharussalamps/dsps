@@ -1,19 +1,25 @@
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Text, View } from 'react-native';
-import { Button, Card, EmptyState, ScreenHeader, StatusPill, TextField } from '@/components';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Button, Card, EmptyState, Hero, Icon, Screen, ScreenHeader, TextField } from '@/components';
 import { useClasses } from '@/features/students/hooks';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
-import { semantic, spacing, typography } from '@/theme/tokens';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { assignRole, createStaffAccount, revokeRole, setStaffStatus, type AccountRow } from './api';
+import type { RootStackParamList } from '@/navigation/types';
+import { colors, semantic, spacing } from '@/theme/tokens';
+import { assignRole, createStaffAccount, createStaffLogin, revokeRole, setStaffStatus, updateStaffAccount, type AccountRow } from './api';
+import { AccountCard, confirmRevoke } from './AccountCard';
 import { useAccounts, useRoles } from './hooks';
-import { ImportStudentsSection } from './ImportStudentsSection';
+import { ImportStaffSection } from './ImportStaffSection';
 
 type ScopeType = 'school' | 'grade' | 'class' | 'self';
 
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
 export function UserAccountsScreen() {
+  const navigation = useNavigation<Nav>();
   const me = useAuthStore((s) => s.staff);
   const accounts = useAccounts();
   const roles = useRoles();
@@ -30,15 +36,19 @@ export function UserAccountsScreen() {
 
   const [creating, setCreating] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [query, setQuery] = useState('');
   const [staffNo, setStaffNo] = useState('');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [saving, setSaving] = useState(false);
 
   const [assigningFor, setAssigningFor] = useState<string | null>(null);
   const [roleId, setRoleId] = useState<string | null>(null);
   const [scopeType, setScopeType] = useState<ScopeType>('school');
   const [scopeId, setScopeId] = useState<string | null>(null);
+  const [creatingLoginFor, setCreatingLoginFor] = useState<string | null>(null);
 
   async function invalidate() {
     await queryClient.invalidateQueries({ queryKey: ['accounts', 'list'] });
@@ -48,11 +58,19 @@ export function UserAccountsScreen() {
     if (!staffNo.trim() || !fullName.trim() || !phone.trim()) return;
     setSaving(true);
     try {
-      await createStaffAccount({ staffNo: staffNo.trim(), fullName: fullName.trim(), phone: phone.trim() });
+      await createStaffAccount({
+        staffNo: staffNo.trim(),
+        fullName: fullName.trim(),
+        phone: phone.trim(),
+        email: email.trim() || undefined,
+        birthDate: birthDate.trim() || undefined,
+      });
       setCreating(false);
       setStaffNo('');
       setFullName('');
       setPhone('');
+      setEmail('');
+      setBirthDate('');
       await invalidate();
     } finally {
       setSaving(false);
@@ -83,113 +101,132 @@ export function UserAccountsScreen() {
     await invalidate();
   }
 
+  async function doUpdate(staffId: string, input: { staffNo: string; fullName: string; phone: string; email?: string; birthDate?: string }) {
+    await updateStaffAccount(staffId, input);
+    await invalidate();
+  }
+
+  async function doCreateLogin(account: AccountRow) {
+    setCreatingLoginFor(account.id);
+    try {
+      const { email, temporaryPassword, emailSent, created } = await createStaffLogin(account.id);
+      await invalidate();
+      Alert.alert(
+        created ? 'Login created' : 'New login issued',
+        emailSent
+          ? `An email with their sign-in details has been sent to ${email}.\n\nIf it doesn't arrive, here's the temporary password to relay yourself: ${temporaryPassword}`
+          : `Couldn't email them automatically — give ${account.fullName} these details yourself:\n\nEmail: ${email}\nTemporary password: ${temporaryPassword}\n\nThey'll be asked to choose their own password immediately after signing in — this one won't be shown again.`,
+      );
+    } catch (err) {
+      Alert.alert('Could not create login', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setCreatingLoginFor(null);
+    }
+  }
+
+  const term = query.trim().toLowerCase();
+  const filteredAccounts = term
+    ? (accounts.data ?? []).filter((a) => a.fullName.toLowerCase().includes(term) || a.staffNo.toLowerCase().includes(term))
+    : accounts.data ?? [];
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: semantic.background }} edges={['top', 'left', 'right']}>
-      <View style={{ padding: spacing.lg, gap: spacing.md }}>
-        <ScreenHeader title="User accounts">
-          <View style={{ flexDirection: 'row', gap: spacing.xs }}>
-            <Button label={showImport ? 'Hide import' : 'Import'} size="sm" variant="outline" onPress={() => setShowImport((v) => !v)} />
-            <Button label={creating ? 'Cancel' : 'Create'} size="sm" onPress={() => setCreating((v) => !v)} />
+    <Screen scroll={false} padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Staff accounts" tone="onPrimary" back={navigation.canGoBack()}>
+          <View style={styles.headerActions}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={showImport ? 'Hide import' : 'Import staff'}
+              hitSlop={8}
+              onPress={() => setShowImport((v) => !v)}
+              style={[styles.headerButton, showImport && styles.headerButtonActive]}
+            >
+              <Icon name="cloud-upload-outline" size={22} color={colors.white} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={creating ? 'Cancel create staff account' : 'Create staff account'}
+              hitSlop={8}
+              onPress={() => setCreating((v) => !v)}
+              style={[styles.headerButton, creating && styles.headerButtonActive]}
+            >
+              <Icon name={creating ? 'close' : 'person-add-outline'} size={22} color={colors.white} />
+            </Pressable>
           </View>
         </ScreenHeader>
-        {creating ? (
-          <Card>
-            <TextField label="Staff number" value={staffNo} onChangeText={setStaffNo} autoCapitalize="none" />
-            <TextField label="Full name" value={fullName} onChangeText={setFullName} />
-            <TextField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-            <Button label="Save" onPress={() => void submitCreate()} loading={saving} />
-          </Card>
-        ) : null}
-        {showImport ? <ImportStudentsSection /> : null}
-      </View>
+        <TextField placeholder="Search by name or staff number" value={query} onChangeText={setQuery} autoCapitalize="none" style={styles.searchInput} />
+      </Hero>
+
+      {creating || showImport ? (
+        <View style={{ padding: spacing.lg, paddingBottom: 0, gap: spacing.md }}>
+          {creating ? (
+            <Card>
+              <TextField label="Staff number" value={staffNo} onChangeText={setStaffNo} autoCapitalize="none" />
+              <TextField label="Full name" value={fullName} onChangeText={setFullName} />
+              <TextField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+              <TextField
+                label="Email"
+                hint="Needed to create their login later"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+              <TextField label="Birth date (optional)" placeholder="YYYY-MM-DD" value={birthDate} onChangeText={setBirthDate} />
+              <Button label="Save" onPress={() => void submitCreate()} loading={saving} />
+            </Card>
+          ) : null}
+          {showImport ? <ImportStaffSection /> : null}
+        </View>
+      ) : null}
 
       {accounts.isLoading ? (
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
       ) : (
         <FlatList
-          data={accounts.data ?? []}
+          data={filteredAccounts}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingHorizontal: spacing.lg, gap: spacing.sm, paddingBottom: spacing.xl }}
-          ListEmptyComponent={<EmptyState title="No staff accounts" />}
+          contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm, paddingBottom: spacing.xl }}
+          ListEmptyComponent={<EmptyState title={term ? 'No staff match your search' : 'No staff accounts'} />}
           renderItem={({ item }) => (
-            <Card flat>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <View style={{ gap: 2, flex: 1 }}>
-                  <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>{item.fullName}</Text>
-                  <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
-                    {item.staffNo} · {item.hasLogin ? 'Has login' : 'No login yet'}
-                  </Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                    {item.roles.map((r) => (
-                      <View key={r.staffRoleId} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                        <StatusPill label={`${r.roleName} · ${r.scopeType}`} tone="gold" />
-                        <Button
-                          label="✕"
-                          size="sm"
-                          variant="ghost"
-                          onPress={() =>
-                            Alert.alert('Revoke this role?', `${r.roleName} (${r.scopeType}) will be removed from ${item.fullName}.`, [
-                              { text: 'Cancel', style: 'cancel' },
-                              { text: 'Revoke', style: 'destructive', onPress: () => void doRevoke(r.staffRoleId) },
-                            ])
-                          }
-                        />
-                      </View>
-                    ))}
-                  </View>
-                </View>
-                <StatusPill label={item.status} tone={item.status === 'active' ? 'success' : 'neutral'} />
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: spacing.xs, marginTop: spacing.sm }}>
-                <Button label={assigningFor === item.id ? 'Cancel' : 'Assign role'} size="sm" variant="outline" onPress={() => setAssigningFor(assigningFor === item.id ? null : item.id)} />
-                <Button label={item.status === 'active' ? 'Deactivate' : 'Reactivate'} size="sm" variant="ghost" onPress={() => void toggleStatus(item)} />
-              </View>
-
-              {assigningFor === item.id ? (
-                <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
-                  <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>ROLE</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                    {(roles.data ?? []).map((r) => (
-                      <Button key={r.id} label={r.name} size="sm" variant={roleId === r.id ? 'primary' : 'outline'} onPress={() => setRoleId(r.id)} />
-                    ))}
-                  </View>
-                  <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>SCOPE</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                    {(['school', 'grade', 'class', 'self'] as ScopeType[]).map((st) => (
-                      <Button
-                        key={st}
-                        label={st}
-                        size="sm"
-                        variant={scopeType === st ? 'primary' : 'outline'}
-                        onPress={() => {
-                          setScopeType(st);
-                          setScopeId(null);
-                        }}
-                      />
-                    ))}
-                  </View>
-                  {scopeType === 'grade' ? (
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                      {(grades.data ?? []).map((g) => (
-                        <Button key={g.id} label={g.name} size="sm" variant={scopeId === g.id ? 'primary' : 'outline'} onPress={() => setScopeId(g.id)} />
-                      ))}
-                    </View>
-                  ) : null}
-                  {scopeType === 'class' ? (
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
-                      {(classes.data ?? []).map((c) => (
-                        <Button key={c.id} label={c.name} size="sm" variant={scopeId === c.id ? 'primary' : 'outline'} onPress={() => setScopeId(c.id)} />
-                      ))}
-                    </View>
-                  ) : null}
-                  <Button label="Grant" size="sm" onPress={() => void submitAssign(item.id)} loading={saving} />
-                </View>
-              ) : null}
-            </Card>
+            <AccountCard
+              account={item}
+              isAssigning={assigningFor === item.id}
+              onToggleAssigning={() => {
+                setAssigningFor(assigningFor === item.id ? null : item.id);
+                setRoleId(null);
+                setScopeId(null);
+              }}
+              roles={roles.data ?? []}
+              roleId={roleId}
+              onSelectRole={setRoleId}
+              scopeType={scopeType}
+              onSelectScope={(st) => {
+                setScopeType(st);
+                setScopeId(null);
+              }}
+              scopeId={scopeId}
+              onSelectScopeId={setScopeId}
+              grades={grades.data ?? []}
+              classes={classes.data ?? []}
+              onGrant={() => void submitAssign(item.id)}
+              saving={saving}
+              onToggleStatus={() => void toggleStatus(item)}
+              onRevokeRole={(staffRoleId, roleName, scope) => confirmRevoke(item.fullName, roleName, scope, () => void doRevoke(staffRoleId))}
+              onCreateLogin={() => void doCreateLogin(item)}
+              isCreatingLogin={creatingLoginFor === item.id}
+              onUpdate={(input) => doUpdate(item.id, input)}
+            />
           )}
         />
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  headerButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  headerButtonActive: { backgroundColor: 'rgba(255,255,255,0.22)' },
+  searchInput: { backgroundColor: colors.white, borderWidth: 0 },
+});

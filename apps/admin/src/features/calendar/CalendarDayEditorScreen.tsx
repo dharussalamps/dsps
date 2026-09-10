@@ -2,7 +2,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import { Alert, Text, View } from 'react-native';
-import { Button, Card, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, Hero, Screen, ScreenHeader, TextField } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { spacing, typography, semantic } from '@/theme/tokens';
@@ -64,8 +64,11 @@ export function CalendarDayEditorScreen() {
   }
 
   return (
-    <Screen>
-      <ScreenHeader title="Edit day" subtitle={params.date} />
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="Edit day" subtitle={params.date} tone="onPrimary" back={navigation.canGoBack()} />
+      </Hero>
+      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
       <Card>
         <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>DAY TYPE</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
@@ -74,7 +77,7 @@ export function CalendarDayEditorScreen() {
           ))}
         </View>
         <TextField label="Label (optional)" value={label} onChangeText={setLabelOverride} />
-        <Button label={saved ? 'Saved ✓' : 'Save'} onPress={save} loading={saving} />
+        <Button label={saved ? 'Saved' : 'Save'} icon={saved ? 'checkmark' : undefined} onPress={save} loading={saving} />
         {dayType !== 'school' ? (
           <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
             Changing a past school day recomputes attendance percentages the next time summaries run.
@@ -82,6 +85,7 @@ export function CalendarDayEditorScreen() {
         ) : null}
       </Card>
       <Button label="Back to calendar" variant="ghost" onPress={() => navigation.goBack()} />
+      </View>
     </Screen>
   );
 }

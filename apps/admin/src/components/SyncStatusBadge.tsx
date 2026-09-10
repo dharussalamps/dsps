@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSyncStore } from '@/store/syncStore';
 import { colors, radius, spacing, typography } from '@/theme/tokens';
 import { drainQueue } from '@/lib/offline/queue';
+import { Icon } from './Icon';
 
 // The pill itself stays visually compact; hitSlop pads the actual tappable
 // area out to the 44dp minimum (section 14, Definition of done) without
@@ -40,7 +41,8 @@ export function SyncStatusBadge() {
 
   return (
     <View style={[styles.base, styles.synced]}>
-      <Text style={styles.syncedText}>✓ {t('common.synced')}</Text>
+      <Icon name="checkmark-circle" size={14} color={colors.success} />
+      <Text style={styles.syncedText}>{t('common.synced')}</Text>
     </View>
   );
 }

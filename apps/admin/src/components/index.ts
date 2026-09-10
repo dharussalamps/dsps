@@ -1,5 +1,7 @@
 export { Screen } from './Screen';
+export { Avatar } from './Avatar';
 export { Card } from './Card';
+export { Hero } from './Hero';
 export { Button } from './Button';
 export { StatusPill } from './StatusPill';
 export type { PillTone } from './StatusPill';
@@ -7,3 +9,6 @@ export { TextField } from './TextField';
 export { ScreenHeader } from './ScreenHeader';
 export { EmptyState } from './EmptyState';
 export { SyncStatusBadge } from './SyncStatusBadge';
+export { Icon } from './Icon';
+export type { IconName } from './Icon';
+export { DatePicker } from './DatePicker';

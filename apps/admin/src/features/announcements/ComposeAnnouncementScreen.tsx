@@ -3,7 +3,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Text, View } from 'react-native';
-import { Button, Card, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, Hero, Screen, ScreenHeader, TextField } from '@/components';
 import { useClasses } from '@/features/students/hooks';
 import { supabase } from '@/lib/supabase';
 import type { RootStackParamList } from '@/navigation/types';
@@ -100,8 +100,11 @@ export function ComposeAnnouncementScreen() {
   }
 
   return (
-    <Screen>
-      <ScreenHeader title="New announcement" />
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero>
+        <ScreenHeader title="New announcement" tone="onPrimary" back={navigation.canGoBack()} />
+      </Hero>
+      <View style={{ padding: spacing.lg, gap: spacing.lg }}>
       <Card>
         <TextField label="Title" value={title} onChangeText={setTitle} />
         <TextField label="Message" value={body} onChangeText={setBody} multiline />
@@ -145,7 +148,13 @@ export function ComposeAnnouncementScreen() {
         ) : null}
 
         <View style={{ flexDirection: 'row', gap: spacing.xs, marginTop: spacing.sm }}>
-          <Button label={priority ? 'High priority ✓' : 'Mark high priority'} size="sm" variant={priority ? 'primary' : 'outline'} onPress={() => setPriority((v) => !v)} />
+          <Button
+            label={priority ? 'High priority' : 'Mark high priority'}
+            icon={priority ? 'checkmark' : undefined}
+            size="sm"
+            variant={priority ? 'primary' : 'outline'}
+            onPress={() => setPriority((v) => !v)}
+          />
           <Button label={scheduling ? 'Publish now instead' : 'Schedule for later'} size="sm" variant={scheduling ? 'primary' : 'outline'} onPress={() => setScheduling((v) => !v)} />
         </View>
         {scheduling ? (
@@ -162,6 +171,7 @@ export function ComposeAnnouncementScreen() {
         {error ? <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{error}</Text> : null}
         <Button label={scheduling ? 'Schedule' : 'Publish'} onPress={() => void submit()} loading={submitting} />
       </Card>
+      </View>
     </Screen>
   );
 }
