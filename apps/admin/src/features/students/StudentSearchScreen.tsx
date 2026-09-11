@@ -3,7 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
-import { Button, EmptyState, Hero, Icon, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, TextField } from '@/components';
 import { useCanCreateStudents } from '@/features/accounts/hooks';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, minTapTarget, radius, semantic, spacing, typography } from '@/theme/tokens';
@@ -49,7 +49,8 @@ export function StudentSearchScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="school-outline" bottomIcon="people-outline" />
         <ScreenHeader title={t('nav.students')} tone="onPrimary">
           {canCreateStudents ? (
             <Pressable
@@ -121,9 +122,13 @@ export function StudentSearchScreen() {
           <FlatList
             data={withClassName(roster.data ?? [])}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}
+            contentContainerStyle={{ padding: spacing.lg, gap: spacing.xs }}
             renderItem={({ item }) => (
-              <StudentListItem student={item} onPress={() => navigation.navigate('StudentProfile', { studentId: item.id })} />
+              <StudentListItem
+                student={{ ...item, rollNo: undefined }}
+                onPress={() => navigation.navigate('StudentProfile', { studentId: item.id })}
+                compact
+              />
             )}
             ListEmptyComponent={
               roster.isLoading ? (

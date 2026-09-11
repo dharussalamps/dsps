@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Keyboard, Text, View } from 'react-native';
 import { Button, TextField } from '@/components';
 import { createGuardian, linkGuardianToStudent } from '@/features/guardians/api';
 import { useGuardianByNic } from '@/features/guardians/hooks';
 import { colors, semantic, spacing, typography } from '@/theme/tokens';
 
-type Props = { studentId: string; onLinked: () => void };
+type Props = { studentId: string; onLinked: () => void; onDirtyChange?: (dirty: boolean) => void };
 
-const RELATIONSHIP_OPTIONS = ['Father', 'Mother', 'Grandfather', 'Grandmother', 'Brother/Sister', 'Guardian'];
-const ECONOMIC_STATUS_OPTIONS = ['Very low', 'Low', 'Middle', 'Upper middle', 'High'];
+const RELATIONSHIP_OPTIONS = ['Father', 'Mother', 'Grandparent', 'Brother/Sister', 'Guardian'];
+const ECONOMIC_STATUS_OPTIONS = ['Low', 'L-M', 'Middle', 'U-M', 'High'];
 
 /**
  * A guardian is one record shared across every child of theirs (section
@@ -19,7 +19,7 @@ const ECONOMIC_STATUS_OPTIONS = ['Very low', 'Low', 'Middle', 'Upper middle', 'H
  * instead of creating a duplicate. No match means the form stays editable
  * to create a new guardian.
  */
-export function AddGuardianSection({ studentId, onLinked }: Props) {
+export function AddGuardianSection({ studentId, onLinked, onDirtyChange }: Props) {
   const [nicNumber, setNicNumber] = useState('');
   const [isPrimary, setIsPrimary] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -38,6 +38,25 @@ export function AddGuardianSection({ studentId, onLinked }: Props) {
   const match = useGuardianByNic(nicNumber);
   const matched = match.data ?? null;
   const locked = !!matched;
+
+  const dirty =
+    !!nicNumber.trim() ||
+    !!fullName.trim() ||
+    !!relationship ||
+    !!phonePrimary.trim() ||
+    !!phoneAlt.trim() ||
+    !!email.trim() ||
+    !!occupation.trim() ||
+    !!economicStatus ||
+    !!address.trim() ||
+    !!gsDivision.trim() ||
+    isPrimary;
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-notify when dirtiness itself changes; cleanup resets on unmount too.
+  }, [dirty]);
 
   function reset() {
     Keyboard.dismiss();

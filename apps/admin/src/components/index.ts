@@ -2,6 +2,7 @@ export { Screen } from './Screen';
 export { Avatar } from './Avatar';
 export { Card } from './Card';
 export { Hero } from './Hero';
+export { HeroDoodle } from './HeroDoodle';
 export { Button } from './Button';
 export { StatusPill } from './StatusPill';
 export type { PillTone } from './StatusPill';

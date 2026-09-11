@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Card, TextField } from '@/components';
 import { pickCsvFile } from '@/lib/csvFile';
@@ -12,7 +12,7 @@ type ImportResult = {
   results: { row_index: number; id: string; accepted: boolean; error: string | null }[];
 };
 
-const COLUMNS = 'staff_no, full_name, phone, email, joined_on';
+const COLUMNS = 'staff_no, full_name, phone, email, joined_on, address';
 
 /**
  * section 8/build task 5: spreadsheet import. Section 10's screen table
@@ -22,12 +22,18 @@ const COLUMNS = 'staff_no, full_name, phone, email, joined_on';
  * new route (see backend/supabase/functions/import-records for the shared
  * per-row-savepoint pattern the RPC uses).
  */
-export function ImportStaffSection() {
+export function ImportStaffSection({ onDirtyChange }: { onDirtyChange?: (dirty: boolean) => void } = {}) {
   const [csv, setCsv] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onDirtyChange?.(!!csv.trim());
+    return () => onDirtyChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-notify when dirtiness itself changes; cleanup resets on unmount too.
+  }, [csv]);
 
   async function pickFile() {
     setError(null);

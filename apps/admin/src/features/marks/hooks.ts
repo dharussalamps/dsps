@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   fetchClassSubjectAverage,
   fetchCurrentTerm,
+  fetchMarkEntryContext,
   fetchOutstandingMarkSheets,
   fetchStudentMarks,
   fetchStudentTermPosition,
@@ -10,6 +11,13 @@ import {
   listSubjectsForTeacherInClass,
   listVisibleMarkSheets,
 } from './api';
+
+export function useMarkEntryContext(classId: string, subjectId: string, termId: string) {
+  return useQuery({
+    queryKey: ['marks', 'entry-context', classId, subjectId, termId],
+    queryFn: () => fetchMarkEntryContext(classId, subjectId, termId),
+  });
+}
 
 export function useSubjectsForClass(classId: string) {
   return useQuery({ queryKey: ['marks', 'subjects', classId], queryFn: () => listSubjectsForClass(classId) });

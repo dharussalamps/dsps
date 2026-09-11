@@ -1,7 +1,7 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { Avatar, Card, Hero, Icon, Screen, ScreenHeader, type IconName } from '@/components';
+import { Avatar, Card, Hero, HeroDoodle, Icon, Screen, ScreenHeader, type IconName } from '@/components';
 import { Text, View } from 'react-native';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
@@ -21,7 +21,9 @@ const menu: MenuItem[] = [
   { label: 'Staff directory', route: 'StaffDirectory', icon: 'people-outline' },
   { label: 'Set class', route: 'SetClass', icon: 'swap-horizontal-outline' },
   { label: 'Leave requests', route: 'LeaveRequests', icon: 'checkmark-done-outline' },
+  { label: 'Leave allocation', route: 'LeaveAllocation', icon: 'calendar-outline' },
   { label: 'Marks review', route: 'MarksReview', icon: 'document-text-outline' },
+  { label: 'Exams & marks', route: 'Exams', icon: 'school-outline' },
   { label: 'Academic calendar', route: 'AcademicCalendar', icon: 'calendar-outline' },
   { label: 'Classes, subjects & terms', route: 'AcademicStructure', icon: 'layers-outline' },
   { label: 'Analytics', route: 'Analytics', icon: 'stats-chart-outline' },
@@ -39,7 +41,8 @@ export function MoreScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="grid-outline" bottomIcon="school-outline" />
         <ScreenHeader title={t('nav.more')} tone="onPrimary" />
         {staff ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.xs }}>

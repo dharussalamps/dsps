@@ -2,7 +2,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, HeroDoodle, Screen, ScreenHeader, TextField } from '@/components';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import { useAuthStore } from '@/store/authStore';
 import { semantic, spacing, typography } from '@/theme/tokens';
 import { addDiaryEntry } from './api';
@@ -23,6 +24,8 @@ export function DiaryScreen() {
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
 
+  useConfirmDiscardOnLeave(adding && (!!title.trim() || !!body.trim()));
+
   async function submit() {
     if (!staff || !title.trim()) return;
     setSaving(true);
@@ -39,7 +42,8 @@ export function DiaryScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="star-outline" bottomIcon="calendar-outline" />
         <ScreenHeader title="School diary" subtitle={String(year)} tone="onPrimary" back={navigation.canGoBack()}>
           <Button label={adding ? 'Cancel' : 'Add entry'} icon={adding ? 'close' : 'add'} size="sm" variant="secondary" onPress={() => setAdding((v) => !v)} />
         </ScreenHeader>

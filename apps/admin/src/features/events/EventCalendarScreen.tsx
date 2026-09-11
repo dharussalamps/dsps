@@ -3,8 +3,9 @@ import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, HeroDoodle, Screen, ScreenHeader, TextField } from '@/components';
 import { listStaff, type StaffSummary } from '@/features/staff/api';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import { parseDMY } from '@/lib/date';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
@@ -35,6 +36,18 @@ export function EventCalendarScreen() {
   const [responsibleQuery, setResponsibleQuery] = useState('');
   const [responsibleResults, setResponsibleResults] = useState<StaffSummary[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useConfirmDiscardOnLeave(
+    adding &&
+      (!!title.trim() ||
+        !!description.trim() ||
+        !!category.trim() ||
+        !!startsOn.trim() ||
+        !!endsOn.trim() ||
+        !!location.trim() ||
+        !!responsible ||
+        !!responsibleQuery.trim()),
+  );
 
   async function searchResponsible(q: string) {
     setResponsibleQuery(q);
@@ -98,7 +111,8 @@ export function EventCalendarScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="star-outline" bottomIcon="calendar-outline" />
         <ScreenHeader title="Events" tone="onPrimary" back={navigation.canGoBack()}>
           <Button label={adding ? 'Cancel' : 'Add event'} icon={adding ? 'close' : 'add'} size="sm" variant="secondary" onPress={() => setAdding((v) => !v)} />
         </ScreenHeader>

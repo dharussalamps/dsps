@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Card, SectionHeader, StatusPill, TextField } from '@/components';
 import { useAuthStore } from '@/store/authStore';
@@ -25,7 +25,7 @@ const statusTone: Record<string, 'success' | 'warning' | 'neutral'> = {
  * renders nothing, since an unauthorized query and a genuinely-empty one
  * are indistinguishable by design (section 5.4).
  */
-export function BenefitsSection({ studentId }: { studentId: string }) {
+export function BenefitsSection({ studentId, onDirtyChange }: { studentId: string; onDirtyChange?: (dirty: boolean) => void }) {
   const staff = useAuthStore((s) => s.staff);
   const queryClient = useQueryClient();
   const benefits = useBenefits(studentId);
@@ -33,6 +33,13 @@ export function BenefitsSection({ studentId }: { studentId: string }) {
   const [adding, setAdding] = useState(false);
   const [scheme, setScheme] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const dirty = adding && !!scheme.trim();
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-notify when dirtiness itself changes; cleanup resets on unmount too.
+  }, [dirty]);
 
   if (!benefits.data) return null;
   // Distinguishes "the query ran but returned nothing" from "still loading" —

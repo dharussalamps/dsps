@@ -97,6 +97,44 @@ export async function createGuardian(input: NewGuardianInput): Promise<string> {
   return data.id;
 }
 
+export type GuardianUpdateInput = {
+  fullName: string;
+  relationship?: string;
+  phonePrimary: string;
+  phoneAlt?: string;
+  nicNumber?: string;
+  email?: string;
+  occupation?: string;
+  economicStatus?: string;
+  address?: string;
+  gsDivision?: string;
+};
+
+/**
+ * Updates a guardian's own record. A guardian is shared across every child
+ * of theirs, so this changes what every one of their children's profiles
+ * shows — there's no per-student copy to edit instead.
+ */
+export async function updateGuardian(guardianId: string, input: GuardianUpdateInput): Promise<void> {
+  const { error } = await supabase
+    .from('guardians')
+    .update({
+      full_name: input.fullName.trim(),
+      relationship: input.relationship?.trim() || null,
+      phone_primary: input.phonePrimary.trim(),
+      phone_alt: input.phoneAlt?.trim() || null,
+      nic_number: input.nicNumber?.trim() || null,
+      email: input.email?.trim() || null,
+      occupation: input.occupation?.trim() || null,
+      economic_status: input.economicStatus?.trim() || null,
+      address: input.address?.trim() || null,
+      gs_division: input.gsDivision?.trim() || null,
+    })
+    .eq('id', guardianId);
+
+  if (error) throw error;
+}
+
 /**
  * Links an existing guardian to a student. A student has at most one primary
  * guardian (one_primary_guardian, a partial unique index) — demoting
@@ -117,4 +155,30 @@ export async function linkGuardianToStudent(studentId: string, guardianId: strin
     .from('student_guardians')
     .upsert({ student_id: studentId, guardian_id: guardianId, is_primary: isPrimary }, { onConflict: 'student_id,guardian_id' });
   if (error) throw error;
+}
+
+/**
+ * Removes a guardian from a student. A guardian record is shared across
+ * every child of theirs, so this only unlinks it here if it's still linked
+ * to someone else afterward — otherwise the now-orphaned record is deleted
+ * outright rather than left behind.
+ */
+export async function removeGuardianFromStudent(studentId: string, guardianId: string): Promise<void> {
+  const { error: unlinkError } = await supabase
+    .from('student_guardians')
+    .delete()
+    .eq('student_id', studentId)
+    .eq('guardian_id', guardianId);
+  if (unlinkError) throw unlinkError;
+
+  const { count, error: countError } = await supabase
+    .from('student_guardians')
+    .select('student_id', { count: 'exact', head: true })
+    .eq('guardian_id', guardianId);
+  if (countError) throw countError;
+
+  if (!count) {
+    const { error: deleteError } = await supabase.from('guardians').delete().eq('id', guardianId);
+    if (deleteError) throw deleteError;
+  }
 }

@@ -7,8 +7,11 @@ export type AccountRow = {
   fullName: string;
   phone: string;
   email: string | null;
+  address: string | null;
   /** 'YYYY-MM-DD', or null if never set — powers the Home screen's birthday greeting. */
   birthDate: string | null;
+  /** 'YYYY-MM-DD', or null if never set — powers the "years of service" figure on the staff profile's Attendance tab. */
+  joinedOn: string | null;
   status: 'active' | 'inactive' | 'left';
   hasLogin: boolean;
   roles: RoleAssignment[];
@@ -18,7 +21,7 @@ export async function listAccounts(): Promise<AccountRow[]> {
   const { data, error } = await supabase
     .from('staff')
     .select(
-      'id, staff_no, full_name, phone, email, birth_date, status, auth_user_id, staff_roles!staff_roles_staff_id_fkey(id, revoked_at, scope_type, scope_id, roles(name))',
+      'id, staff_no, full_name, phone, email, address, birth_date, joined_on, status, auth_user_id, staff_roles!staff_roles_staff_id_fkey(id, revoked_at, scope_type, scope_id, roles(name))',
     )
     .order('full_name')
     .returns<
@@ -28,7 +31,9 @@ export async function listAccounts(): Promise<AccountRow[]> {
         full_name: string;
         phone: string;
         email: string | null;
+        address: string | null;
         birth_date: string | null;
+        joined_on: string | null;
         status: string;
         auth_user_id: string | null;
         staff_roles: { id: string; revoked_at: string | null; scope_type: string; scope_id: string | null; roles: { name: string } | null }[];
@@ -41,7 +46,9 @@ export async function listAccounts(): Promise<AccountRow[]> {
     fullName: r.full_name,
     phone: r.phone,
     email: r.email,
+    address: r.address,
     birthDate: r.birth_date,
+    joinedOn: r.joined_on,
     status: r.status as AccountRow['status'],
     hasLogin: r.auth_user_id != null,
     roles: r.staff_roles
@@ -50,10 +57,26 @@ export async function listAccounts(): Promise<AccountRow[]> {
   }));
 }
 
-export async function createStaffAccount(input: { staffNo: string; fullName: string; phone: string; email?: string; birthDate?: string }): Promise<string> {
+export async function createStaffAccount(input: {
+  staffNo: string;
+  fullName: string;
+  phone: string;
+  email?: string;
+  address?: string;
+  birthDate?: string;
+  joinedOn?: string;
+}): Promise<string> {
   const { data, error } = await supabase
     .from('staff')
-    .insert({ staff_no: input.staffNo, full_name: input.fullName, phone: input.phone, email: input.email || null, birth_date: input.birthDate || null })
+    .insert({
+      staff_no: input.staffNo,
+      full_name: input.fullName,
+      phone: input.phone,
+      email: input.email || null,
+      address: input.address || null,
+      birth_date: input.birthDate || null,
+      joined_on: input.joinedOn || null,
+    })
     .select('id')
     .single();
   if (error) throw error;
@@ -62,11 +85,19 @@ export async function createStaffAccount(input: { staffNo: string; fullName: str
 
 export async function updateStaffAccount(
   staffId: string,
-  input: { staffNo: string; fullName: string; phone: string; email?: string; birthDate?: string },
+  input: { staffNo: string; fullName: string; phone: string; email?: string; address?: string; birthDate?: string; joinedOn?: string },
 ): Promise<void> {
   const { error } = await supabase
     .from('staff')
-    .update({ staff_no: input.staffNo, full_name: input.fullName, phone: input.phone, email: input.email || null, birth_date: input.birthDate || null })
+    .update({
+      staff_no: input.staffNo,
+      full_name: input.fullName,
+      phone: input.phone,
+      email: input.email || null,
+      address: input.address || null,
+      birth_date: input.birthDate || null,
+      joined_on: input.joinedOn || null,
+    })
     .eq('id', staffId);
   if (error) throw error;
 }

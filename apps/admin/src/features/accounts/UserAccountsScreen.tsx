@@ -3,8 +3,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, Icon, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, TextField } from '@/components';
 import { useClasses } from '@/features/students/hooks';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import type { RootStackParamList } from '@/navigation/types';
@@ -42,7 +43,9 @@ export function UserAccountsScreen() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
   const [birthDate, setBirthDate] = useState('');
+  const [joinedOn, setJoinedOn] = useState('');
   const [saving, setSaving] = useState(false);
 
   const [assigningFor, setAssigningFor] = useState<string | null>(null);
@@ -50,6 +53,15 @@ export function UserAccountsScreen() {
   const [scopeType, setScopeType] = useState<ScopeType>('school');
   const [scopeId, setScopeId] = useState<string | null>(null);
   const [creatingLoginFor, setCreatingLoginFor] = useState<string | null>(null);
+  const [importDirty, setImportDirty] = useState(false);
+  const [dirtyAccountIds, setDirtyAccountIds] = useState<Set<string>>(new Set());
+
+  const creatingDirty =
+    creating &&
+    (!!staffNo.trim() || !!fullName.trim() || !!phone.trim() || !!email.trim() || !!address.trim() || !!birthDate.trim() || !!joinedOn.trim());
+  const assigningDirty = assigningFor != null && !!roleId;
+
+  useConfirmDiscardOnLeave(creatingDirty || importDirty || assigningDirty || dirtyAccountIds.size > 0);
 
   async function invalidate() {
     await queryClient.invalidateQueries({ queryKey: ['accounts', 'list'] });
@@ -62,6 +74,11 @@ export function UserAccountsScreen() {
       Alert.alert('Invalid birth date', 'Enter birth date as DD/MM/YYYY.');
       return;
     }
+    const isoJoinedOn = joinedOn.trim() ? parseDMY(joinedOn) : undefined;
+    if (joinedOn.trim() && !isoJoinedOn) {
+      Alert.alert('Invalid joined date', 'Enter the joined date as DD/MM/YYYY.');
+      return;
+    }
     setSaving(true);
     try {
       await createStaffAccount({
@@ -69,14 +86,18 @@ export function UserAccountsScreen() {
         fullName: fullName.trim(),
         phone: phone.trim(),
         email: email.trim() || undefined,
+        address: address.trim() || undefined,
         birthDate: isoBirthDate ?? undefined,
+        joinedOn: isoJoinedOn ?? undefined,
       });
       setCreating(false);
       setStaffNo('');
       setFullName('');
       setPhone('');
       setEmail('');
+      setAddress('');
       setBirthDate('');
+      setJoinedOn('');
       await invalidate();
     } finally {
       setSaving(false);
@@ -107,7 +128,10 @@ export function UserAccountsScreen() {
     await invalidate();
   }
 
-  async function doUpdate(staffId: string, input: { staffNo: string; fullName: string; phone: string; email?: string; birthDate?: string }) {
+  async function doUpdate(
+    staffId: string,
+    input: { staffNo: string; fullName: string; phone: string; email?: string; address?: string; birthDate?: string; joinedOn?: string },
+  ) {
     await updateStaffAccount(staffId, input);
     await invalidate();
   }
@@ -137,7 +161,8 @@ export function UserAccountsScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="key-outline" bottomIcon="shield-checkmark-outline" />
         <ScreenHeader title="Staff accounts" tone="onPrimary" back={navigation.canGoBack()} hideBell>
           <View style={styles.headerActions}>
             <Pressable
@@ -178,11 +203,13 @@ export function UserAccountsScreen() {
                 autoCapitalize="none"
                 keyboardType="email-address"
               />
+              <TextField label="Address (optional)" value={address} onChangeText={setAddress} multiline />
               <TextField label="Birth date (optional)" placeholder="DD/MM/YYYY" value={birthDate} onChangeText={setBirthDate} />
+              <TextField label="Joined date (optional)" placeholder="DD/MM/YYYY" value={joinedOn} onChangeText={setJoinedOn} />
               <Button label="Save" onPress={() => void submitCreate()} loading={saving} />
             </Card>
           ) : null}
-          {showImport ? <ImportStaffSection /> : null}
+          {showImport ? <ImportStaffSection onDirtyChange={setImportDirty} /> : null}
         </View>
       ) : null}
 
@@ -222,6 +249,15 @@ export function UserAccountsScreen() {
               onCreateLogin={() => void doCreateLogin(item)}
               isCreatingLogin={creatingLoginFor === item.id}
               onUpdate={(input) => doUpdate(item.id, input)}
+              onDirtyChange={(dirty) =>
+                setDirtyAccountIds((prev) => {
+                  if (dirty === prev.has(item.id)) return prev;
+                  const next = new Set(prev);
+                  if (dirty) next.add(item.id);
+                  else next.delete(item.id);
+                  return next;
+                })
+              }
             />
           )}
         />

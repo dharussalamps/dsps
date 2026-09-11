@@ -17,11 +17,14 @@ import { EventCalendarScreen } from '@/features/events/EventCalendarScreen';
 import { EventDetailScreen } from '@/features/events/EventDetailScreen';
 import { InventoryItemScreen } from '@/features/inventory/InventoryItemScreen';
 import { InventoryScreen } from '@/features/inventory/InventoryScreen';
+import { LeaveAllocationScreen } from '@/features/leave/LeaveAllocationScreen';
 import { LeaveRequestDetailScreen } from '@/features/leave/LeaveRequestDetailScreen';
 import { LeaveRequestsScreen } from '@/features/leave/LeaveRequestsScreen';
 import { MyLeaveScreen } from '@/features/leave/MyLeaveScreen';
 import { MarkEntryScreen } from '@/features/marks/MarkEntryScreen';
 import { MarksReviewScreen } from '@/features/marks/MarksReviewScreen';
+import { ExamsScreen } from '@/features/exams/ExamsScreen';
+import { ExamMarksScreen } from '@/features/exams/ExamMarksScreen';
 import { SettingsScreen } from '@/features/settings/SettingsScreen';
 import { AddStudentScreen } from '@/features/students/AddStudentScreen';
 import { ClassDetailScreen } from '@/features/students/ClassDetailScreen';
@@ -65,6 +68,8 @@ export function AppNavigator() {
 
       <Stack.Screen name="MarkEntry" component={MarkEntryScreen} />
       <Stack.Screen name="MarksReview" component={MarksReviewScreen} />
+      <Stack.Screen name="Exams" component={ExamsScreen} />
+      <Stack.Screen name="ExamMarks" component={ExamMarksScreen} />
 
       <Stack.Screen name="StaffDirectory" component={StaffDirectoryScreen} />
       <Stack.Screen name="StaffProfile" component={StaffProfileScreen} />
@@ -72,6 +77,7 @@ export function AppNavigator() {
       <Stack.Screen name="MyLeave" component={MyLeaveScreen} />
       <Stack.Screen name="LeaveRequests" component={LeaveRequestsScreen} />
       <Stack.Screen name="LeaveRequestDetail" component={LeaveRequestDetailScreen} />
+      <Stack.Screen name="LeaveAllocation" component={LeaveAllocationScreen} />
 
       <Stack.Screen name="ComposeAnnouncement" component={ComposeAnnouncementScreen} />
 

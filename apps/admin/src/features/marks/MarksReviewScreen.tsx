@@ -2,7 +2,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill } from '@/components';
+import { Button, Card, EmptyState, Hero, HeroDoodle, Screen, ScreenHeader, StatusPill } from '@/components';
 import { semantic, spacing, typography } from '@/theme/tokens';
 import { reopenMarkSheet } from './api';
 import { useVisibleMarkSheets } from './hooks';
@@ -25,7 +25,8 @@ export function MarksReviewScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="ribbon-outline" bottomIcon="book-outline" />
         <ScreenHeader title="Marks review" tone="onPrimary" back={navigation.canGoBack()} />
       </Hero>
       <FlatList

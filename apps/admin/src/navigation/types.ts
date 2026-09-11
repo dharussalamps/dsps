@@ -33,6 +33,8 @@ export type RootStackParamList = {
 
   MarkEntry: { classId: string; subjectId: string; termId: string };
   MarksReview: undefined;
+  Exams: undefined;
+  ExamMarks: { markSheetId: string };
 
   StaffDirectory: undefined;
   StaffProfile: { staffId: string };
@@ -40,6 +42,7 @@ export type RootStackParamList = {
   MyLeave: undefined;
   LeaveRequests: undefined;
   LeaveRequestDetail: { requestId: string };
+  LeaveAllocation: undefined;
 
   ComposeAnnouncement: undefined;
 

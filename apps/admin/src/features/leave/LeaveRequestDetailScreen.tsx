@@ -3,7 +3,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
-import { Button, Card, Hero, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { Button, Card, Hero, HeroDoodle, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import type { RootStackParamList } from '@/navigation/types';
 import { spacing, typography, semantic } from '@/theme/tokens';
 import { approveLeave, rejectLeave } from './api';
@@ -24,10 +25,13 @@ export function LeaveRequestDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  useConfirmDiscardOnLeave(!!selectedCover || coverNotNeeded || !!remarks.trim());
+
   if (detail.isLoading) {
     return (
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="airplane-outline" bottomIcon="calendar-outline" />
           <ScreenHeader title="Leave request" tone="onPrimary" back={navigation.canGoBack()} />
         </Hero>
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
@@ -37,7 +41,8 @@ export function LeaveRequestDetailScreen() {
   if (!detail.data) {
     return (
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="airplane-outline" bottomIcon="calendar-outline" />
           <ScreenHeader title="Leave request" tone="onPrimary" back={navigation.canGoBack()} />
         </Hero>
         <Text style={{ ...typography.body, color: semantic.textSecondary, padding: spacing.lg }}>Request not found.</Text>
@@ -81,7 +86,8 @@ export function LeaveRequestDetailScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="airplane-outline" bottomIcon="calendar-outline" />
         <ScreenHeader title={d.staffName} subtitle={d.leaveTypeName} tone="onPrimary" back={navigation.canGoBack()}>
           <StatusPill label={d.status} tone={d.status === 'pending' ? 'warning' : 'neutral'} />
         </ScreenHeader>

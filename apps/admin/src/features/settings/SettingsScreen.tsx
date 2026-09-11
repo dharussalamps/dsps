@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { useEffect, useState } from 'react';
 import { Alert, Platform, Text, View } from 'react-native';
-import { Button, Card, Hero, Screen, ScreenHeader, StatusPill } from '@/components';
+import { Button, Card, Hero, HeroDoodle, Screen, ScreenHeader, StatusPill } from '@/components';
 import { isBiometricAvailable, isBiometricUnlockEnabled, setBiometricUnlockEnabled } from '@/lib/biometrics';
 import { hasUnsyncedOperations } from '@/lib/offline';
 import { useAuthStore } from '@/store/authStore';
@@ -102,7 +102,8 @@ export function SettingsScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="settings-outline" bottomIcon="construct-outline" />
         <ScreenHeader title="Settings" tone="onPrimary" back={navigation.canGoBack()} />
       </Hero>
 

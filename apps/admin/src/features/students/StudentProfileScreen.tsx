@@ -2,16 +2,20 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, Icon, type IconName, Screen, ScreenHeader, SectionHeader, SegmentedControl, StatusPill } from '@/components';
+import { Button, Card, EmptyState, Hero, HeroDoodle, Icon, type IconName, Screen, ScreenHeader, SectionHeader, SegmentedControl, StatusPill } from '@/components';
+import { removeGuardianFromStudent } from '@/features/guardians/api';
 import { useCurrentTerm, useStudentMarks, useStudentTermPosition, useStudentTermTrend } from '@/features/marks/hooks';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
 import { setStudentStatus } from './api';
 import { ActivitySection } from './ActivitySection';
+import { AddGuardianSection } from './AddGuardianSection';
 import { AttendanceAnalysisCard } from './AttendanceAnalysisCard';
 import { AttendanceHistoryCalendar } from './AttendanceHistoryCalendar';
 import { BenefitsSection } from './BenefitsSection';
+import { EditGuardianSection } from './EditGuardianSection';
 import { GuardianCallButton } from './GuardianCallButton';
 import { PerformanceTrendChart } from './PerformanceTrendChart';
 import { useStudentGuardians, useStudentProfile } from './hooks';
@@ -39,11 +43,20 @@ export function StudentProfileScreen() {
   const staff = useAuthStore((s) => s.staff);
   const queryClient = useQueryClient();
   const [statusBusy, setStatusBusy] = useState(false);
+  const [editingGuardianId, setEditingGuardianId] = useState<string | null>(null);
+  const [removingGuardianId, setRemovingGuardianId] = useState<string | null>(null);
+  const [addingGuardian, setAddingGuardian] = useState(false);
+  const [guardianFormDirty, setGuardianFormDirty] = useState(false);
+  const [activityDirty, setActivityDirty] = useState(false);
+  const [benefitsDirty, setBenefitsDirty] = useState(false);
+
+  useConfirmDiscardOnLeave(guardianFormDirty || activityDirty || benefitsDirty);
 
   if (profile.isLoading) {
     return (
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="school-outline" bottomIcon="people-outline" />
           <ScreenHeader title="Student" tone="onPrimary" back={navigation.canGoBack()} hideBell />
         </Hero>
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
@@ -54,7 +67,8 @@ export function StudentProfileScreen() {
   if (!profile.data) {
     return (
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="school-outline" bottomIcon="people-outline" />
           <ScreenHeader title="Student" tone="onPrimary" back={navigation.canGoBack()} hideBell />
         </Hero>
         <View style={{ padding: spacing.lg }}>
@@ -97,11 +111,35 @@ export function StudentProfileScreen() {
     }
   }
 
+  function confirmRemoveGuardian(guardianId: string, fullName: string) {
+    Alert.alert(
+      `Remove ${fullName}?`,
+      'If this guardian is linked to another student, only this link is removed. Otherwise their record is deleted entirely.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => void doRemoveGuardian(guardianId) },
+      ],
+    );
+  }
+
+  async function doRemoveGuardian(guardianId: string) {
+    setRemovingGuardianId(guardianId);
+    try {
+      await removeGuardianFromStudent(s.id, guardianId);
+      await queryClient.invalidateQueries({ queryKey: ['students', 'guardians', s.id] });
+    } catch {
+      Alert.alert('Could not remove this guardian', 'You may not have permission to do this.');
+    } finally {
+      setRemovingGuardianId(null);
+    }
+  }
+
   const primaryGuardian = guardians.data ? (guardians.data.find((g) => g.isPrimary) ?? guardians.data[0]) : undefined;
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="school-outline" bottomIcon="people-outline" />
         <View style={styles.profileRow}>
           {navigation.canGoBack() ? (
             <Pressable
@@ -155,13 +193,57 @@ export function StudentProfileScreen() {
 
       {guardians.data ? (
         <Card>
-          <SectionHeader icon="people-outline" label="GUARDIANS" />
+          <SectionHeader
+            icon="people-outline"
+            label="GUARDIANS"
+            accessory={
+              <Button
+                label=""
+                accessibilityLabel={addingGuardian ? 'Cancel add guardian' : 'Add guardian'}
+                icon={addingGuardian ? 'close' : 'add'}
+                size="sm"
+                variant="outline"
+                onPress={() => {
+                  setAddingGuardian((v) => !v);
+                  setGuardianFormDirty(false);
+                }}
+              />
+            }
+          />
+          {addingGuardian ? (
+            <AddGuardianSection
+              studentId={s.id}
+              onLinked={() => {
+                setAddingGuardian(false);
+                setGuardianFormDirty(false);
+                void queryClient.invalidateQueries({ queryKey: ['students', 'guardians', s.id] });
+              }}
+              onDirtyChange={setGuardianFormDirty}
+            />
+          ) : null}
           {guardians.data.length === 0 ? (
             <Text style={{ ...typography.caption, color: semantic.textSecondary, paddingVertical: spacing.xs }}>No guardians on record.</Text>
           ) : null}
-          {guardians.data.map((g, i) => (
-            <View key={g.guardianId} style={[styles.guardianBlock, i > 0 && styles.guardianBlockDivider]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+          {guardians.data.map((g, i) =>
+            editingGuardianId === g.guardianId ? (
+              <View key={g.guardianId} style={[styles.guardianBlock, i > 0 && styles.guardianBlockDivider]}>
+                <EditGuardianSection
+                  studentId={s.id}
+                  guardian={g}
+                  onSaved={() => {
+                    setEditingGuardianId(null);
+                    setGuardianFormDirty(false);
+                    void queryClient.invalidateQueries({ queryKey: ['students', 'guardians', s.id] });
+                  }}
+                  onCancel={() => {
+                    setEditingGuardianId(null);
+                    setGuardianFormDirty(false);
+                  }}
+                  onDirtyChange={setGuardianFormDirty}
+                />
+              </View>
+            ) : (
+              <View key={g.guardianId} style={[styles.guardianBlock, i > 0 && styles.guardianBlockDivider]}>
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>{g.fullName}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' }}>
@@ -169,19 +251,40 @@ export function StudentProfileScreen() {
                     {g.isPrimary ? <StatusPill label="Primary" tone="gold" /> : null}
                   </View>
                 </View>
-                <GuardianCallButton studentId={s.id} guardianId={g.guardianId} phone={g.phonePrimary} />
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.sm }}>
+                  <InfoTile icon="call-outline" label="Contact" value={g.phonePrimary} />
+                  <InfoTile icon="mail-outline" label="Email" value={g.email ?? '—'} />
+                  <InfoTile icon="card-outline" label="NIC number" value={g.nicNumber ?? '—'} />
+                  <InfoTile icon="briefcase-outline" label="Occupation" value={g.occupation ?? '—'} />
+                  <InfoTile icon="wallet-outline" label="Economic status" value={g.economicStatus ?? '—'} />
+                  <InfoTile icon="map-outline" label="GS division" value={g.gsDivision ?? '—'} />
+                  <InfoTile icon="location-outline" label="Address" value={g.address ?? '—'} wide />
+                </View>
+                <View style={{ flexDirection: 'row', gap: spacing.xs, marginTop: spacing.sm }}>
+                  <Button
+                    label=""
+                    accessibilityLabel={`Edit ${g.fullName}`}
+                    icon="create-outline"
+                    size="sm"
+                    variant="outline"
+                    onPress={() => setEditingGuardianId(g.guardianId)}
+                    style={{ flex: 1 }}
+                  />
+                  <GuardianCallButton studentId={s.id} guardianId={g.guardianId} phone={g.phonePrimary} style={{ flex: 1 }} />
+                  <Button
+                    label=""
+                    accessibilityLabel={`Remove ${g.fullName}`}
+                    icon="trash-outline"
+                    size="sm"
+                    variant="danger"
+                    loading={removingGuardianId === g.guardianId}
+                    onPress={() => confirmRemoveGuardian(g.guardianId, g.fullName)}
+                    style={{ flex: 1 }}
+                  />
+                </View>
               </View>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginTop: spacing.sm }}>
-                <InfoTile icon="call-outline" label="Contact" value={g.phonePrimary} />
-                <InfoTile icon="mail-outline" label="Email" value={g.email ?? '—'} />
-                <InfoTile icon="card-outline" label="NIC number" value={g.nicNumber ?? '—'} />
-                <InfoTile icon="briefcase-outline" label="Occupation" value={g.occupation ?? '—'} />
-                <InfoTile icon="wallet-outline" label="Economic status" value={g.economicStatus ?? '—'} />
-                <InfoTile icon="map-outline" label="GS division" value={g.gsDivision ?? '—'} />
-                <InfoTile icon="location-outline" label="Address" value={g.address ?? '—'} wide />
-              </View>
-            </View>
-          ))}
+            ),
+          )}
         </Card>
       ) : null}
       </>
@@ -267,8 +370,8 @@ export function StudentProfileScreen() {
 
       {tab === 'other' ? (
       <>
-      <ActivitySection studentId={s.id} />
-      <BenefitsSection studentId={s.id} />
+      <ActivitySection studentId={s.id} onDirtyChange={setActivityDirty} />
+      <BenefitsSection studentId={s.id} onDirtyChange={setBenefitsDirty} />
 
       {staff ? (
         <Card>

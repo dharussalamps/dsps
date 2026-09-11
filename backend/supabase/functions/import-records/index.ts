@@ -46,6 +46,7 @@ const staffRowSchema = z.object({
   phone: z.string().trim().min(1),
   email: z.string().trim().email().optional().or(z.literal('')),
   joined_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
+  address: z.string().trim().optional(),
 });
 
 const entityConfig = {

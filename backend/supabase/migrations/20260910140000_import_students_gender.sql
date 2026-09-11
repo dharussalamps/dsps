@@ -1,6 +1,9 @@
--- Carries the new students.gender column (20260910130000) through
--- import_students, the single write path both AddStudentScreen and the CSV
--- import use to create a student.
+-- Carries the new students.gender column (20260910130000_student_gender)
+-- through import_students, the single write path both AddStudentScreen and
+-- the CSV import use to create a student. Builds on top of
+-- 20260910130000_import_students_guardian_fields's version of this
+-- function (same create-or-replace target) rather than the older one, so
+-- that migration's extended guardian columns aren't dropped.
 create or replace function import_students(p_rows jsonb)
 returns table (row_index int, admission_no text, accepted boolean, error text)
 language plpgsql
@@ -61,12 +64,21 @@ begin
       end if;
 
       if v_guardian_id is null and v_row ->> 'guardian_name' is not null and v_row ->> 'guardian_phone' is not null then
-        insert into guardians (full_name, relationship, phone_primary, nic_number)
+        insert into guardians (
+          full_name, relationship, phone_primary, nic_number,
+          phone_alt, email, occupation, economic_status, address, gs_division
+        )
         values (
           v_row ->> 'guardian_name',
           v_row ->> 'guardian_relationship',
           v_row ->> 'guardian_phone',
-          nullif(v_row ->> 'guardian_nic_number', '')
+          nullif(v_row ->> 'guardian_nic_number', ''),
+          nullif(v_row ->> 'guardian_phone_alt', ''),
+          nullif(v_row ->> 'guardian_email', ''),
+          nullif(v_row ->> 'guardian_occupation', ''),
+          nullif(v_row ->> 'guardian_economic_status', ''),
+          nullif(v_row ->> 'guardian_address', ''),
+          nullif(v_row ->> 'guardian_gs_division', '')
         )
         returning id into v_guardian_id;
       end if;

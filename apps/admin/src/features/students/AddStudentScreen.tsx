@@ -3,7 +3,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, CalendarModal, Card, Hero, Icon, Screen, ScreenHeader, SectionHeader, SegmentedControl, StatusPill, TextField } from '@/components';
+import { Button, CalendarModal, Card, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SectionHeader, SegmentedControl, StatusPill, TextField } from '@/components';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, minTapTarget, radius, semantic, spacing, typography } from '@/theme/tokens';
 import { formatDMYInput, parseDMY, toDMY } from '@/lib/date';
@@ -36,8 +37,17 @@ export function AddStudentScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [importDirty, setImportDirty] = useState(false);
+  const [guardianFormDirty, setGuardianFormDirty] = useState(false);
 
   const guardians = useStudentGuardians(createdId ?? undefined);
+
+  const ownFormDirty =
+    !createdId &&
+    mode === 'single' &&
+    (!!fullName.trim() || !!preferredName.trim() || !!admissionNo.trim() || !!dateOfBirth.trim() || !!gender || !!classId);
+
+  useConfirmDiscardOnLeave(ownFormDirty || importDirty || guardianFormDirty);
 
   async function submit() {
     if (!fullName.trim() || !admissionNo.trim() || !dateOfBirth.trim() || !gender) return;
@@ -71,7 +81,8 @@ export function AddStudentScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="school-outline" bottomIcon="people-outline" />
         <ScreenHeader title="Add student" tone="onPrimary" back={navigation.canGoBack()} hideBell />
         {!createdId ? (
           <SegmentedControl
@@ -87,7 +98,7 @@ export function AddStudentScreen() {
 
       <View style={{ padding: spacing.lg, gap: spacing.lg }}>
         {mode === 'import' && !createdId ? (
-          <ImportStudentsSection />
+          <ImportStudentsSection onDirtyChange={setImportDirty} />
         ) : !createdId ? (
           <Card>
             <SectionHeader icon="person-add-outline" label="STUDENT DETAILS" />
@@ -190,6 +201,7 @@ export function AddStudentScreen() {
                 <AddGuardianSection
                   studentId={createdId}
                   onLinked={() => void queryClient.invalidateQueries({ queryKey: ['students', 'guardians', createdId] })}
+                  onDirtyChange={setGuardianFormDirty}
                 />
               </View>
             </Card>

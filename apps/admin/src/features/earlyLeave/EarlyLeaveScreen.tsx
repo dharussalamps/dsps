@@ -3,10 +3,11 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Animated, FlatList, StyleSheet, Text, View } from 'react-native';
-import { Avatar, Button, Card, EmptyState, Hero, Icon, Screen, ScreenHeader, TextField } from '@/components';
+import { Avatar, Button, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, TextField } from '@/components';
 import { useIsPrincipal } from '@/features/accounts/hooks';
 import { todayIso, useAttendanceEditable, useClassName } from '@/features/attendance/hooks';
 import { useStudentsInClass } from '@/features/students/hooks';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
@@ -50,6 +51,8 @@ export function EarlyLeaveScreen() {
   const [collectedBy, setCollectedBy] = useState('');
   const [saving, setSaving] = useState(false);
 
+  useConfirmDiscardOnLeave(openStudentId != null && (!!reason.trim() || !!collectedBy.trim()));
+
   const recordByStudent = new Map((recorded.data ?? []).map((r) => [r.studentId, r]));
   const totalCount = roster.data?.length ?? 0;
   const leftCount = recordByStudent.size;
@@ -83,7 +86,8 @@ export function EarlyLeaveScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="walk-outline" bottomIcon="time-outline" />
         <ScreenHeader
           title={className.data ? `Early leave · ${className.data}` : 'Early leave'}
           subtitle={isToday ? 'Today' : format(parseISO(onDate), 'EEEE, d MMMM yyyy')}

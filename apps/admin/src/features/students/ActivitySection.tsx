@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import { Button, Card, Icon, SectionHeader, TextField } from '@/components';
 import { parseDMY } from '@/lib/date';
@@ -9,7 +9,7 @@ import { addAchievement, addMembership } from './api';
 import { useAchievements, useMemberships } from './hooks';
 
 /** section 10: StudentActivityTab — "achievements, memberships, class responsibility" + "Add achievement, add membership". */
-export function ActivitySection({ studentId }: { studentId: string }) {
+export function ActivitySection({ studentId, onDirtyChange }: { studentId: string; onDirtyChange?: (dirty: boolean) => void }) {
   const staff = useAuthStore((s) => s.staff);
   const queryClient = useQueryClient();
   const achievements = useAchievements(studentId);
@@ -23,6 +23,16 @@ export function ActivitySection({ studentId }: { studentId: string }) {
   const [position, setPosition] = useState('');
   const [endedOn, setEndedOn] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const dirty =
+    (mode === 'achievement' && (!!title.trim() || !!category.trim() || !!level.trim())) ||
+    (mode === 'membership' && (!!groupName.trim() || !!position.trim() || !!endedOn.trim()));
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-notify when dirtiness itself changes; cleanup resets on unmount too.
+  }, [dirty]);
 
   async function invalidate() {
     await queryClient.invalidateQueries({ queryKey: ['students', 'achievements', studentId] });

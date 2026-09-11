@@ -2,7 +2,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, View } from 'react-native';
-import { Button, EmptyState, Hero, Screen, ScreenHeader } from '@/components';
+import { Button, EmptyState, Hero, HeroDoodle, Screen, ScreenHeader } from '@/components';
 import { todayIso, useExistingSubmission } from '@/features/attendance/hooks';
 import { useCurrentTerm, useSubjectsForTeacherInClass } from '@/features/marks/hooks';
 import type { RootStackParamList } from '@/navigation/types';
@@ -33,7 +33,8 @@ export function ClassDetailScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="school-outline" bottomIcon="people-outline" />
         <ScreenHeader title="Roster" subtitle={`${roster.data?.length ?? 0} students`} tone="onPrimary" back={navigation.canGoBack()} />
       </Hero>
       <FlatList

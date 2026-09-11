@@ -1,5 +1,20 @@
 import { supabase } from '@/lib/supabase';
 
+export type MarkEntryContext = { className: string; subjectName: string; termName: string };
+
+/** Display context for MarkEntryScreen's header — the route only carries ids, and a single-purpose lookup here is cheaper than routing through the heavier class/subject lists elsewhere in the app. */
+export async function fetchMarkEntryContext(classId: string, subjectId: string, termId: string): Promise<MarkEntryContext> {
+  const [{ data: cls, error: clsError }, { data: subject, error: subjectError }, { data: term, error: termError }] = await Promise.all([
+    supabase.from('classes').select('name').eq('id', classId).single(),
+    supabase.from('subjects').select('name').eq('id', subjectId).single(),
+    supabase.from('terms').select('name').eq('id', termId).single(),
+  ]);
+  if (clsError) throw clsError;
+  if (subjectError) throw subjectError;
+  if (termError) throw termError;
+  return { className: cls.name, subjectName: subject.name, termName: term.name };
+}
+
 export type SubjectOption = { subjectId: string; name: string };
 
 /** All subjects offered for a class's grade — used as the fallback picker source for a reviewer (sectional head/principal) who isn't necessarily any one subject's assigned teacher. */
@@ -51,7 +66,8 @@ export async function fetchCurrentTerm(): Promise<CurrentTerm | null> {
 
 export type MarkSheetInfo = { id: string; status: 'draft' | 'submitted' | 'reopened'; maxScore: number };
 
-export async function getOrCreateMarkSheet(classId: string, subjectId: string, termId: string): Promise<MarkSheetInfo> {
+/** maxScore only applies the first time a class+subject+term sheet is created (the exam's "out of") — it's ignored once a sheet already exists, so re-opening an existing exam never silently rescales it. */
+export async function getOrCreateMarkSheet(classId: string, subjectId: string, termId: string, maxScore?: number): Promise<MarkSheetInfo> {
   const { data: existing, error: existingError } = await supabase
     .from('mark_sheets')
     .select('id, status, max_score')
@@ -64,23 +80,23 @@ export async function getOrCreateMarkSheet(classId: string, subjectId: string, t
 
   const { data: created, error: createError } = await supabase
     .from('mark_sheets')
-    .insert({ class_id: classId, subject_id: subjectId, term_id: termId })
+    .insert({ class_id: classId, subject_id: subjectId, term_id: termId, ...(maxScore != null ? { max_score: maxScore } : {}) })
     .select('id, status, max_score')
     .single();
   if (createError) throw createError;
   return { id: created.id, status: created.status as MarkSheetInfo['status'], maxScore: created.max_score };
 }
 
-export type MarkRow = { studentId: string; fullName: string; score: number | null };
+export type MarkRow = { studentId: string; fullName: string; rollNo: string | null; admissionNo: string; score: number | null };
 
 export async function fetchMarksForSheet(markSheetId: string, classId: string): Promise<MarkRow[]> {
   const [{ data: roster, error: rosterError }, { data: marks, error: marksError }] = await Promise.all([
     supabase
       .from('student_enrolments')
-      .select('roll_no, students(id, full_name)')
+      .select('roll_no, students(id, full_name, admission_no)')
       .eq('class_id', classId)
       .order('roll_no')
-      .returns<{ roll_no: string | null; students: { id: string; full_name: string } | null }[]>(),
+      .returns<{ roll_no: string | null; students: { id: string; full_name: string; admission_no: string } | null }[]>(),
     supabase.from('marks').select('student_id, score').eq('mark_sheet_id', markSheetId),
   ]);
   if (rosterError) throw rosterError;
@@ -89,7 +105,13 @@ export async function fetchMarksForSheet(markSheetId: string, classId: string): 
   const byStudent = new Map((marks ?? []).map((m) => [m.student_id, m.score]));
   return (roster ?? [])
     .filter((r) => r.students != null)
-    .map((r) => ({ studentId: r.students!.id, fullName: r.students!.full_name, score: byStudent.get(r.students!.id) ?? null }));
+    .map((r) => ({
+      studentId: r.students!.id,
+      fullName: r.students!.full_name,
+      rollNo: r.roll_no,
+      admissionNo: r.students!.admission_no,
+      score: byStudent.get(r.students!.id) ?? null,
+    }));
 }
 
 /** enteredBy must be the current staff member's staff.id (not their auth user id) — RLS's write_marks policy checks entered_by = current_staff_id(). */

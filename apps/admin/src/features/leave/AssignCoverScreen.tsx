@@ -2,9 +2,10 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
-import { Button, Card, Hero, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, Hero, HeroDoodle, Screen, ScreenHeader, TextField } from '@/components';
 import { useClassesForCurrentYear } from '@/features/academicStructure/hooks';
 import { listStaff, type StaffSummary } from '@/features/staff/api';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import { parseDMY } from '@/lib/date';
 import type { RootStackParamList } from '@/navigation/types';
 import { spacing, typography, semantic } from '@/theme/tokens';
@@ -28,6 +29,8 @@ export function AssignCoverScreen() {
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useConfirmDiscardOnLeave(!!staff || !!startsOn.trim() || !!endsOn.trim() || !!reason.trim());
 
   async function search(q: string) {
     setQuery(q);
@@ -56,7 +59,8 @@ export function AssignCoverScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="airplane-outline" bottomIcon="calendar-outline" />
         <ScreenHeader title="Assign cover teacher" subtitle="Grants class-teacher rights for a date range" tone="onPrimary" back={navigation.canGoBack()} />
       </Hero>
       <View style={{ padding: spacing.lg, gap: spacing.lg }}>

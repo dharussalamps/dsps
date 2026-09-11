@@ -2,7 +2,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, Linking, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill } from '@/components';
+import { Button, Card, EmptyState, Hero, HeroDoodle, Screen, ScreenHeader, StatusPill } from '@/components';
 import { semantic, spacing, typography } from '@/theme/tokens';
 import { exportAttendanceSummary, exportMarksSummary, fetchStudentsAtRisk } from './api';
 import { useCurrentTermId, useGradeNames, useSummaries } from './hooks';
@@ -34,7 +34,8 @@ export function AnalyticsScreen() {
   if (termId.isLoading) {
     return (
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="stats-chart-outline" bottomIcon="trending-up-outline" />
           <ScreenHeader title="Analytics" tone="onPrimary" back={navigation.canGoBack()} />
         </Hero>
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
@@ -45,7 +46,8 @@ export function AnalyticsScreen() {
   if (!termId.data) {
     return (
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="stats-chart-outline" bottomIcon="trending-up-outline" />
           <ScreenHeader title="Analytics" tone="onPrimary" back={navigation.canGoBack()} />
         </Hero>
         <View style={{ padding: spacing.lg }}>
@@ -59,7 +61,8 @@ export function AnalyticsScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="stats-chart-outline" bottomIcon="trending-up-outline" />
         <ScreenHeader title="Analytics" subtitle="This term" tone="onPrimary" back={navigation.canGoBack()}>
           <View style={{ flexDirection: 'row', gap: spacing.xs }}>
             <Button label="Attendance" icon="download-outline" size="sm" variant="secondary" loading={exporting === 'attendance'} onPress={() => void doExport('attendance')} />

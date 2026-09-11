@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Card, TextField } from '@/components';
 import { pickCsvFile } from '@/lib/csvFile';
@@ -45,12 +45,18 @@ function duplicateMessage(error: string | null): string | null {
  * backend/supabase/functions/import-records for the shared
  * per-row-savepoint pattern the RPC uses).
  */
-export function ImportStudentsSection() {
+export function ImportStudentsSection({ onDirtyChange }: { onDirtyChange?: (dirty: boolean) => void } = {}) {
   const [csv, setCsv] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onDirtyChange?.(!!csv.trim());
+    return () => onDirtyChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-notify when dirtiness itself changes; cleanup resets on unmount too.
+  }, [csv]);
 
   async function pickFile() {
     setError(null);

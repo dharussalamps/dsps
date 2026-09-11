@@ -1,5 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchDutyRoster, fetchResponsibilitiesForStaff, fetchStaffAttendanceSummary, fetchTodayPresence, getStaffProfile, listStaff } from './api';
+import {
+  fetchDutyRoster,
+  fetchResponsibilitiesForStaff,
+  fetchResponsibilityTitleSuggestions,
+  fetchStaffAttendanceSummary,
+  fetchTodayPresence,
+  getStaffProfile,
+  listStaff,
+} from './api';
 
 export function useStaffAttendanceSummary(staffId: string | undefined, sinceDate: string) {
   return useQuery({
@@ -35,4 +43,13 @@ export function useResponsibilitiesForStaff(staffId: string | undefined) {
 
 export function useDutyRoster() {
   return useQuery({ queryKey: ['staff', 'duty-roster'], queryFn: fetchDutyRoster });
+}
+
+export function useResponsibilityTitleSuggestions(query: string) {
+  const term = query.trim();
+  return useQuery({
+    queryKey: ['staff', 'responsibility-title-suggestions', term],
+    queryFn: () => fetchResponsibilityTitleSuggestions(term),
+    enabled: term.length > 0,
+  });
 }

@@ -2,7 +2,8 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, HeroDoodle, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { spacing, typography, semantic } from '@/theme/tokens';
@@ -26,6 +27,8 @@ export function InventoryItemScreen() {
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useConfirmDiscardOnLeave(!!amount.trim() || !!note.trim());
 
   async function submit() {
     if (!staff || !amount.trim()) return;
@@ -52,7 +55,8 @@ export function InventoryItemScreen() {
   if (item.isLoading) {
     return (
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="cube-outline" bottomIcon="pricetag-outline" />
           <ScreenHeader title="Item" tone="onPrimary" back={navigation.canGoBack()} />
         </Hero>
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
@@ -62,7 +66,8 @@ export function InventoryItemScreen() {
   if (!item.data) {
     return (
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="cube-outline" bottomIcon="pricetag-outline" />
           <ScreenHeader title="Item" tone="onPrimary" back={navigation.canGoBack()} />
         </Hero>
         <View style={{ padding: spacing.lg }}>
@@ -74,7 +79,8 @@ export function InventoryItemScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="cube-outline" bottomIcon="pricetag-outline" />
         <ScreenHeader title={item.data.name} subtitle={item.data.category} tone="onPrimary" back={navigation.canGoBack()}>
           <StatusPill label={`${item.data.quantity} in stock`} tone={item.data.lowStock ? 'error' : 'success'} />
         </ScreenHeader>

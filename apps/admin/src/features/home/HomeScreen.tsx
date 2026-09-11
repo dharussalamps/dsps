@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { DrawerLayout } from 'react-native-gesture-handler';
-import { Avatar, Button, Card, EmptyState, Hero, Icon, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { Avatar, Button, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
 import { fetchStudentsAtRisk } from '@/features/analytics/api';
 import { remindUnmarkedClassesBulk } from '@/features/attendance/api';
 import { todayIso, useMarkingStatus, useStaffAttendanceToday } from '@/features/attendance/hooks';
@@ -95,7 +95,8 @@ export function HomeScreen() {
       )}
     >
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="ribbon-outline" bottomIcon="school-outline" />
           <ScreenHeader
             title={greeting.title}
             subtitle={greeting.subtitle}

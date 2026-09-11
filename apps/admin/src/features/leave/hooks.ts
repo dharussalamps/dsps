@@ -1,10 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  fetchLeaveAllocations,
   fetchLeaveRequestDetail,
   fetchMyLeaveBalances,
   fetchMyLeaveRequests,
   fetchPendingLeaveRequests,
   listLeaveTypes,
+  setLeaveBalance,
+  setLeaveBalancesForAll,
 } from './api';
 
 export function useLeaveTypes() {
@@ -33,4 +36,34 @@ export function usePendingLeaveRequests() {
 
 export function useLeaveRequestDetail(id: string) {
   return useQuery({ queryKey: ['leave', 'detail', id], queryFn: () => fetchLeaveRequestDetail(id) });
+}
+
+export function useLeaveAllocations(leaveTypeId: string | undefined, academicYearId: string | undefined) {
+  return useQuery({
+    queryKey: ['leave', 'allocations', leaveTypeId, academicYearId],
+    queryFn: () => fetchLeaveAllocations(leaveTypeId as string, academicYearId as string),
+    enabled: !!leaveTypeId && !!academicYearId,
+  });
+}
+
+export function useSetLeaveBalance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: setLeaveBalance,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['leave', 'allocations'] });
+      void queryClient.invalidateQueries({ queryKey: ['leave', 'balances'] });
+    },
+  });
+}
+
+export function useSetLeaveBalancesForAll() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: setLeaveBalancesForAll,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['leave', 'allocations'] });
+      void queryClient.invalidateQueries({ queryKey: ['leave', 'balances'] });
+    },
+  });
 }

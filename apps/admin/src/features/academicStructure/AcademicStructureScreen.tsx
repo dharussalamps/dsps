@@ -1,10 +1,11 @@
 import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, HeroDoodle, Screen, ScreenHeader, TextField } from '@/components';
 import { useAcademicYears } from '@/features/calendar/hooks';
 import { listStaff, type StaffSummary } from '@/features/staff/api';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import { spacing, typography, semantic } from '@/theme/tokens';
 import { addClass, addGrade, addSubject, assignClassSubjectTeacher, removeClassSubjectTeacher } from './api';
 import { useClassSubjectTeachers, useClassesForCurrentYear, useGrades, useSubjects } from './hooks';
@@ -27,19 +28,31 @@ export function AcademicStructureScreen() {
   const queryClient = useQueryClient();
   const currentYear = years.data?.find((y) => y.isCurrent) ?? years.data?.[0];
 
+  const [gradesDirty, setGradesDirty] = useState(false);
+  const [subjectsDirty, setSubjectsDirty] = useState(false);
+  const [classesDirty, setClassesDirty] = useState(false);
+  const [assignmentsDirty, setAssignmentsDirty] = useState(false);
+  useConfirmDiscardOnLeave(gradesDirty || subjectsDirty || classesDirty || assignmentsDirty);
+
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="layers-outline" bottomIcon="school-outline" />
         <ScreenHeader title="Classes, subjects & terms" subtitle="Grades, classes, subjects and who teaches what" tone="onPrimary" back={navigation.canGoBack()} />
       </Hero>
       <View style={{ padding: spacing.lg, gap: spacing.lg }}>
 
-      <GradesSection grades={grades.data ?? []} onChanged={() => queryClient.invalidateQueries({ queryKey: ['academicStructure', 'grades'] })} />
+      <GradesSection
+        grades={grades.data ?? []}
+        onChanged={() => queryClient.invalidateQueries({ queryKey: ['academicStructure', 'grades'] })}
+        onDirtyChange={setGradesDirty}
+      />
 
       <SubjectsSection
         subjects={subjects.data ?? []}
         grades={grades.data ?? []}
         onChanged={() => queryClient.invalidateQueries({ queryKey: ['academicStructure', 'subjects'] })}
+        onDirtyChange={setSubjectsDirty}
       />
 
       <ClassesSection
@@ -50,6 +63,7 @@ export function AcademicStructureScreen() {
           queryClient.invalidateQueries({ queryKey: ['academicStructure', 'classes'] });
           queryClient.invalidateQueries({ queryKey: ['classes', 'current-year'] });
         }}
+        onDirtyChange={setClassesDirty}
       />
 
       <AssignmentsSection
@@ -57,17 +71,33 @@ export function AcademicStructureScreen() {
         classes={classes.data ?? []}
         subjects={subjects.data ?? []}
         onChanged={() => queryClient.invalidateQueries({ queryKey: ['academicStructure', 'class-subject-teachers'] })}
+        onDirtyChange={setAssignmentsDirty}
       />
       </View>
     </Screen>
   );
 }
 
-function GradesSection({ grades, onChanged }: { grades: { id: string; number: number; name: string }[]; onChanged: () => void }) {
+function GradesSection({
+  grades,
+  onChanged,
+  onDirtyChange,
+}: {
+  grades: { id: string; number: number; name: string }[];
+  onChanged: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
+}) {
   const [adding, setAdding] = useState(false);
   const [number, setNumber] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const dirty = adding && (!!number.trim() || !!name.trim());
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-notify when dirtiness itself changes; cleanup resets on unmount too.
+  }, [dirty]);
 
   async function save() {
     if (!number.trim() || !name.trim()) return;
@@ -111,16 +141,25 @@ function SubjectsSection({
   subjects,
   grades,
   onChanged,
+  onDirtyChange,
 }: {
   subjects: { id: string; name: string; code: string | null; gradeIds: string[] }[];
   grades: { id: string; number: number; name: string }[];
   onChanged: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [selectedGrades, setSelectedGrades] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+
+  const dirty = adding && (!!name.trim() || !!code.trim() || selectedGrades.length > 0);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-notify when dirtiness itself changes; cleanup resets on unmount too.
+  }, [dirty]);
 
   async function save() {
     if (!name.trim()) return;
@@ -179,11 +218,13 @@ function ClassesSection({
   grades,
   currentYearId,
   onChanged,
+  onDirtyChange,
 }: {
   classes: { id: string; name: string; gradeId: string; gradeNumber: number; classTeacherId: string | null; classTeacherName: string | null }[];
   grades: { id: string; number: number; name: string }[];
   currentYearId: string | undefined;
   onChanged: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [gradeId, setGradeId] = useState<string | null>(null);
@@ -192,6 +233,13 @@ function ClassesSection({
   const [teacherQuery, setTeacherQuery] = useState('');
   const [teacherResults, setTeacherResults] = useState<StaffSummary[]>([]);
   const [busy, setBusy] = useState(false);
+
+  const dirty = adding && (!!gradeId || !!name.trim() || !!teacher || !!teacherQuery.trim());
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-notify when dirtiness itself changes; cleanup resets on unmount too.
+  }, [dirty]);
 
   async function searchTeachers(q: string) {
     setTeacherQuery(q);
@@ -259,11 +307,13 @@ function AssignmentsSection({
   classes,
   subjects,
   onChanged,
+  onDirtyChange,
 }: {
   assignments: { id: string; classId: string; className: string; subjectId: string; subjectName: string; staffId: string; staffName: string }[];
   classes: { id: string; name: string }[];
   subjects: { id: string; name: string }[];
   onChanged: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [classId, setClassId] = useState<string | null>(null);
@@ -272,6 +322,13 @@ function AssignmentsSection({
   const [teacherQuery, setTeacherQuery] = useState('');
   const [teacherResults, setTeacherResults] = useState<StaffSummary[]>([]);
   const [busy, setBusy] = useState(false);
+
+  const dirty = adding && (!!classId || !!subjectId || !!teacher || !!teacherQuery.trim());
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-notify when dirtiness itself changes; cleanup resets on unmount too.
+  }, [dirty]);
 
   async function searchTeachers(q: string) {
     setTeacherQuery(q);

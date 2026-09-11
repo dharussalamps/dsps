@@ -3,7 +3,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Alert, Text, View } from 'react-native';
-import { Button, Card, Hero, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, Hero, HeroDoodle, Screen, ScreenHeader, TextField } from '@/components';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import { parseDMY } from '@/lib/date';
 import type { RootStackParamList } from '@/navigation/types';
 import { spacing, typography, semantic } from '@/theme/tokens';
@@ -49,6 +50,13 @@ export function AcademicCalendarScreen() {
   const [termEnd, setTermEnd] = useState('');
 
   const currentYear = years.data?.find((y) => y.isCurrent) ?? years.data?.[0];
+
+  useConfirmDiscardOnLeave(
+    (editingSettings &&
+      (dueAt !== (settings.data?.attendanceDueAt ?? '') || editMinutes !== String(settings.data?.attendanceEditMinutes ?? ''))) ||
+      (addingYear && (!!yearLabel.trim() || !!yearStart.trim() || !!yearEnd.trim())) ||
+      (addingTerm && (!!termName.trim() || !!termSequence.trim() || !!termStart.trim() || !!termEnd.trim())),
+  );
 
   function startEdit() {
     if (settings.data) {
@@ -131,7 +139,8 @@ export function AcademicCalendarScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="calendar-outline" bottomIcon="time-outline" />
         <ScreenHeader title="Academic calendar" subtitle={currentYear ? `Year ${currentYear.label}` : settings.data?.schoolName} tone="onPrimary" back={navigation.canGoBack()} />
       </Hero>
       <View style={{ padding: spacing.lg, gap: spacing.lg }}>

@@ -1,7 +1,7 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
-import { Card, EmptyState, Hero, Screen, ScreenHeader } from '@/components';
+import { Card, EmptyState, Hero, HeroDoodle, Screen, ScreenHeader } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
 import { semantic, spacing, typography } from '@/theme/tokens';
 import { usePendingLeaveRequests } from './hooks';
@@ -14,7 +14,8 @@ export function LeaveRequestsScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="airplane-outline" bottomIcon="calendar-outline" />
         <ScreenHeader title="Leave requests" subtitle={`${pending.data?.length ?? 0} pending`} tone="onPrimary" back={navigation.canGoBack()} />
       </Hero>
       <FlatList

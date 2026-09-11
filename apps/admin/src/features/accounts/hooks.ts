@@ -33,6 +33,16 @@ export function useCanCreateStudents(): boolean {
   return data?.some((key) => key === 'principal' || key === 'administrator') ?? false;
 }
 
+/** Deliberately narrower than the write_staff RLS policy (staff.manage/account.manage —
+ * see 20260907200001_accounts.sql), which vice_principal also holds ("every permission
+ * except leave.approve and audit.view" — 003_role_permissions.sql). Gates the inline
+ * contact-details edit on StaffProfileScreen to principal/administrator only, by request —
+ * same narrowing pattern as useCanCreateStudents above. RLS still backstops this either way. */
+export function useCanManageStaff(): boolean {
+  const { data } = useMyRoleKeys();
+  return data?.some((key) => key === 'principal' || key === 'administrator') ?? false;
+}
+
 export type AuditFilters = { actorId?: string; entity?: string; fromDate?: string; toDate?: string };
 
 export function useAuditLog(filters: AuditFilters = {}) {

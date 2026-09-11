@@ -1,7 +1,7 @@
 import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, HeroDoodle, Screen, ScreenHeader, TextField } from '@/components';
 import { listStaff, type StaffSummary } from '@/features/staff/api';
 import { parseDMY } from '@/lib/date';
 import { semantic, spacing, typography } from '@/theme/tokens';
@@ -45,7 +45,8 @@ export function AuditLogScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="key-outline" bottomIcon="shield-checkmark-outline" />
         <ScreenHeader title="Audit log" subtitle={`${audit.data?.length ?? 0} entries${hasFilters ? ' (filtered)' : ''}`} tone="onPrimary" back={navigation.canGoBack()}>
           <Button label={showFilters ? 'Hide filters' : 'Filters'} icon="filter-outline" size="sm" variant="secondary" onPress={() => setShowFilters((v) => !v)} />
         </ScreenHeader>

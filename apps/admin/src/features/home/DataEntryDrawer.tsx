@@ -1,7 +1,7 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Constants from 'expo-constants';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Avatar, Card, Hero, Icon, type IconName } from '@/components';
+import { Avatar, Card, Hero, HeroDoodle, Icon, type IconName } from '@/components';
 import { useMyRoleKeys } from '@/features/accounts/hooks';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
@@ -39,7 +39,7 @@ export function DataEntryDrawerContent({ navigation, onClose }: { navigation: Na
   return (
     <View style={styles.container}>
       <Hero style={styles.hero}>
-        <Icon name="ribbon-outline" size={104} color={colors.white} style={styles.crestDoodle} />
+        <HeroDoodle topIcon="ribbon-outline" bottomIcon="briefcase-outline" />
         {staff ? (
           <View style={styles.identity}>
             <Avatar name={staff.fullName} tone="onPrimary" size={56} style={styles.avatar} />
@@ -97,7 +97,6 @@ export function DataEntryDrawerContent({ navigation, onClose }: { navigation: Na
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: semantic.background },
   hero: { paddingHorizontal: spacing.lg, overflow: 'hidden', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
-  crestDoodle: { position: 'absolute', top: -16, right: -20, opacity: 0.12, transform: [{ rotate: '18deg' }] },
   identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   avatar: { borderWidth: 2, borderColor: 'rgba(255,255,255,0.6)' },
   identityText: { flex: 1, gap: 2 },

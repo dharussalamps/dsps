@@ -11,6 +11,7 @@ import {
   DatePicker,
   EmptyState,
   Hero,
+  HeroDoodle,
   Icon,
   Screen,
   ScreenHeader,
@@ -241,7 +242,8 @@ export function MarkAttendanceScreen() {
   if (roster === null) {
     return (
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="clipboard-outline" bottomIcon="checkmark-done-outline" />
           <ScreenHeader title={className.data ? `Attendance · ${className.data}` : 'Attendance'} tone="onPrimary" back={navigation.canGoBack()} hideBell />
           <DateStrip
             onDate={onDate}
@@ -264,7 +266,8 @@ export function MarkAttendanceScreen() {
   if (roster.length === 0) {
     return (
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="clipboard-outline" bottomIcon="checkmark-done-outline" />
           <ScreenHeader title={className.data ? `Attendance · ${className.data}` : 'Attendance'} tone="onPrimary" back={navigation.canGoBack()} hideBell />
           <DateStrip
             onDate={onDate}
@@ -288,7 +291,8 @@ export function MarkAttendanceScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="clipboard-outline" bottomIcon="checkmark-done-outline" />
         <ScreenHeader title={className.data ? `Attendance · ${className.data}` : 'Attendance'} tone="onPrimary" back={navigation.canGoBack()} hideBell>
           {existingSubmission.data ? <SyncStatusBadge /> : null}
         </ScreenHeader>

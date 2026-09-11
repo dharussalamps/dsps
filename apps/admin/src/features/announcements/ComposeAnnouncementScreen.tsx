@@ -3,8 +3,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Text, View } from 'react-native';
-import { Button, Card, Hero, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, Hero, HeroDoodle, Screen, ScreenHeader, TextField } from '@/components';
 import { useClasses } from '@/features/students/hooks';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import { supabase } from '@/lib/supabase';
 import { parseDMY } from '@/lib/date';
 import type { RootStackParamList } from '@/navigation/types';
@@ -32,6 +33,8 @@ export function ComposeAnnouncementScreen() {
   const [publishTime, setPublishTime] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useConfirmDiscardOnLeave(!!title.trim() || !!body.trim());
 
   const classes = useClasses();
   const grades = useQuery({
@@ -107,7 +110,8 @@ export function ComposeAnnouncementScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="megaphone-outline" bottomIcon="chatbubble-ellipses-outline" />
         <ScreenHeader title="New announcement" tone="onPrimary" back={navigation.canGoBack()} />
       </Hero>
       <View style={{ padding: spacing.lg, gap: spacing.lg }}>

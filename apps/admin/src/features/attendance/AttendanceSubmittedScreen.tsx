@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Avatar, Card, EmptyState, Hero, Icon, Screen, ScreenHeader, SyncStatusBadge } from '@/components';
+import { Avatar, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SyncStatusBadge } from '@/components';
 import { GuardianCallButton } from '@/features/students/GuardianCallButton';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
@@ -41,7 +41,8 @@ export function AttendanceSubmittedScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="clipboard-outline" bottomIcon="checkmark-done-outline" />
         <ScreenHeader
           title={className.data ? `Absentees · ${className.data}` : 'Absentees'}
           subtitle={isToday ? 'Today' : format(parseISO(onDate), 'EEEE, d MMMM yyyy')}

@@ -2,7 +2,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { Pressable, Text, View } from 'react-native';
-import { Button, EmptyState, Hero, Screen, ScreenHeader } from '@/components';
+import { Button, EmptyState, Hero, HeroDoodle, Screen, ScreenHeader } from '@/components';
 import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
 import { markAllNotificationsRead, markNotificationRead, type NotificationRow } from './api';
 import { useMyNotifications } from './hooks';
@@ -35,7 +35,8 @@ export function NotificationsScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="notifications-outline" bottomIcon="mail-outline" />
         <ScreenHeader title="Notifications" tone="onPrimary" back={navigation.canGoBack()}>
           {hasUnread ? <Button label="Mark all read" size="sm" variant="secondary" onPress={() => void markAll()} /> : null}
         </ScreenHeader>

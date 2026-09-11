@@ -2,7 +2,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, Icon, Screen, ScreenHeader, SegmentedControl, StatusPill, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SegmentedControl, StatusPill, TextField } from '@/components';
 import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
 import type { ClassSummary } from './api';
 import { removeStudentFromClass, setStudentClass } from './api';
@@ -44,7 +44,8 @@ export function SetClassScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="school-outline" bottomIcon="people-outline" />
         <ScreenHeader title="Set class" subtitle="Assign a class, or free one up" tone="onPrimary" back={navigation.canGoBack()} hideBell />
         <SegmentedControl
           value={tab}

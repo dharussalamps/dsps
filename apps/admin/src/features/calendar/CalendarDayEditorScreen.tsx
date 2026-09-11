@@ -2,7 +2,8 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import { Alert, Text, View } from 'react-native';
-import { Button, Card, Hero, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, Hero, HeroDoodle, Screen, ScreenHeader, TextField } from '@/components';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { spacing, typography, semantic } from '@/theme/tokens';
@@ -35,6 +36,8 @@ export function CalendarDayEditorScreen() {
   const isPast = params.date < new Date().toISOString().slice(0, 10);
   const isRealChange = day.data != null && dayType !== day.data.dayType;
 
+  useConfirmDiscardOnLeave(!saved && (dayType !== (day.data?.dayType ?? 'school') || label !== (day.data?.label ?? '')));
+
   // FR-CAL-07: "changing the type of a past day recalculates affected
   // attendance percentages, and the user is warned before saving."
   function save() {
@@ -65,7 +68,8 @@ export function CalendarDayEditorScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="calendar-outline" bottomIcon="time-outline" />
         <ScreenHeader title="Edit day" subtitle={params.date} tone="onPrimary" back={navigation.canGoBack()} />
       </Hero>
       <View style={{ padding: spacing.lg, gap: spacing.lg }}>

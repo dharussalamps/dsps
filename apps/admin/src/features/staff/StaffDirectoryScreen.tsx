@@ -1,10 +1,10 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Linking, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { ActivityIndicator, FlatList, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Avatar, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SegmentedControl, StatusPill, TextField } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
-import { colors, semantic, spacing, typography } from '@/theme/tokens';
+import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
 import { todayIso } from '@/features/attendance/hooks';
 import { useDutyRoster, useStaffDirectory, useTodayPresence } from './hooks';
 
@@ -13,6 +13,12 @@ type Tab = 'people' | 'duties';
 
 const presenceTone: Record<string, 'success' | 'warning' | 'neutral'> = { present: 'success', late: 'warning', on_leave: 'neutral' };
 const presenceLabel: Record<string, string> = { present: 'In today', late: 'Late today', on_leave: 'On leave' };
+const presenceAccent: Record<string, string> = { present: colors.teal500, late: colors.gold500, on_leave: colors.ink300 };
+
+const TABS: { key: Tab; label: string; icon: 'people-outline' | 'ribbon-outline' }[] = [
+  { key: 'people', label: 'By person', icon: 'people-outline' },
+  { key: 'duties', label: 'By duty', icon: 'ribbon-outline' },
+];
 
 export function StaffDirectoryScreen() {
   const navigation = useNavigation<Nav>();
@@ -25,26 +31,12 @@ export function StaffDirectoryScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="briefcase-outline" bottomIcon="people-outline" />
         <ScreenHeader title="Staff directory" tone="onPrimary" back={navigation.canGoBack()} />
-        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <Button
-            label="By person"
-            size="sm"
-            variant={tab === 'people' ? 'secondary' : 'outline'}
-            textColor={tab === 'people' ? undefined : colors.white}
-            style={tab === 'people' ? undefined : { borderColor: 'rgba(255,255,255,0.6)' }}
-            onPress={() => setTab('people')}
-          />
-          <Button
-            label="By duty"
-            size="sm"
-            variant={tab === 'duties' ? 'secondary' : 'outline'}
-            textColor={tab === 'duties' ? undefined : colors.white}
-            style={tab === 'duties' ? undefined : { borderColor: 'rgba(255,255,255,0.6)' }}
-            onPress={() => setTab('duties')}
-          />
-        </View>
+
+        <SegmentedControl value={tab} onChange={setTab} options={TABS} />
+
         {tab === 'people' ? (
           <TextField
             placeholder="Search by name or staff number"
@@ -52,57 +44,84 @@ export function StaffDirectoryScreen() {
             onChangeText={setQuery}
             onClear={() => setQuery('')}
             autoCapitalize="none"
-            style={{ backgroundColor: colors.white, borderWidth: 0 }}
+            style={styles.searchInput}
           />
         ) : null}
       </Hero>
 
       <View style={{ flex: 1, padding: spacing.lg }}>
         {tab === 'people' ? (
-          <>
-            {staff.isLoading ? (
-              <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
-            ) : (
-              <FlatList
-                data={staff.data ?? []}
-                keyExtractor={(item) => item.id}
-                contentContainerStyle={{ gap: spacing.sm }}
-                ListEmptyComponent={<EmptyState title="No staff found" />}
-                renderItem={({ item }) => (
-                  <Card onPress={() => navigation.navigate('StaffProfile', { staffId: item.id })} flat style={{ padding: spacing.md }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <View style={{ gap: 2 }}>
-                        <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>{item.fullName}</Text>
-                        <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{item.staffNo}</Text>
+          staff.isLoading ? (
+            <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
+          ) : (
+            <FlatList
+              data={staff.data ?? []}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.xl }}
+              ListEmptyComponent={<EmptyState title="No staff found" message="Try a different name or staff number." />}
+              renderItem={({ item }) => {
+                const presenceStatus = presence.data?.[item.id];
+                const accent =
+                  item.status !== 'active'
+                    ? colors.ink300
+                    : presenceStatus
+                      ? (presenceAccent[presenceStatus] ?? colors.cream200)
+                      : colors.cream200;
+                return (
+                  <Card onPress={() => navigation.navigate('StaffProfile', { staffId: item.id })} style={styles.staffCard}>
+                    <View style={[styles.accentBar, { backgroundColor: accent }]} />
+                    <View style={styles.staffRow}>
+                      <Avatar name={item.fullName} size={36} />
+                      <View style={{ flex: 1, gap: 1 }}>
+                        <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }} numberOfLines={1}>
+                          {item.fullName}
+                        </Text>
+                        <View style={styles.subRow}>
+                          <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{item.staffNo}</Text>
+                          {item.status !== 'active' ? <StatusPill label={item.status} tone="neutral" /> : null}
+                          {presenceStatus ? (
+                            <StatusPill label={presenceLabel[presenceStatus] ?? presenceStatus} tone={presenceTone[presenceStatus] ?? 'neutral'} />
+                          ) : null}
+                        </View>
                       </View>
-                      <Button label="Call" size="sm" variant="outline" onPress={() => Linking.openURL(`tel:${item.phone}`)} />
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: spacing.xs, marginTop: 2 }}>
-                      {item.status !== 'active' ? <StatusPill label={item.status} tone="neutral" /> : null}
-                      {presence.data?.[item.id] ? (
-                        <StatusPill label={presenceLabel[presence.data[item.id]] ?? presence.data[item.id]} tone={presenceTone[presence.data[item.id]] ?? 'neutral'} />
-                      ) : null}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Call ${item.fullName}`}
+                        hitSlop={8}
+                        onPress={() => Linking.openURL(`tel:${item.phone}`)}
+                        style={styles.callBtn}
+                      >
+                        <Icon name="call" size={16} color={semantic.primary} />
+                      </Pressable>
                     </View>
                   </Card>
-                )}
-              />
-            )}
-          </>
+                );
+              }}
+            />
+          )
         ) : duties.isLoading ? (
           <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
         ) : (
           <FlatList
             data={duties.data ?? []}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={{ gap: spacing.sm }}
-            ListEmptyComponent={<EmptyState title="No duties assigned" />}
+            contentContainerStyle={{ gap: spacing.sm, paddingBottom: spacing.xl }}
+            ListEmptyComponent={<EmptyState title="No duties assigned" message="Responsibilities given to staff will appear here." />}
             renderItem={({ item }) => (
-              <Card onPress={() => navigation.navigate('StaffProfile', { staffId: item.staffId })} flat style={{ padding: spacing.md }}>
-                <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>{item.title}</Text>
-                <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
-                  {item.staffName}
-                  {item.scheduleNote ? ` · ${item.scheduleNote}` : ''}
-                </Text>
+              <Card onPress={() => navigation.navigate('StaffProfile', { staffId: item.staffId })} style={styles.dutyCard}>
+                <View style={styles.dutyIcon}>
+                  <Icon name="ribbon" size={15} color={colors.gold900} />
+                </View>
+                <View style={{ flex: 1, gap: 1 }}>
+                  <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }} numberOfLines={1}>
+                    {item.title}
+                  </Text>
+                  <Text style={{ ...typography.caption, color: semantic.textSecondary }} numberOfLines={1}>
+                    {item.staffName}
+                    {item.scheduleNote ? ` · ${item.scheduleNote}` : ''}
+                  </Text>
+                </View>
+                <Icon name="chevron-forward" size={16} color={semantic.textSecondary} />
               </Card>
             )}
           />
@@ -111,3 +130,28 @@ export function StaffDirectoryScreen() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  searchInput: { backgroundColor: colors.white, borderWidth: 0 },
+  staffCard: { padding: 0, overflow: 'hidden' },
+  accentBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
+  staffRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, paddingLeft: spacing.sm + 4 },
+  subRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  callBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: semantic.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dutyCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.sm },
+  dutyIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: colors.gold100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

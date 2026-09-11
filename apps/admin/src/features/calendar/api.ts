@@ -13,6 +13,18 @@ export async function fetchCurrentYearTerms(): Promise<Term[]> {
   return (data?.terms ?? []).sort((a, b) => a.sequence - b.sequence).map((t) => ({ id: t.id, name: t.name, sequence: t.sequence, startsOn: t.starts_on, endsOn: t.ends_on }));
 }
 
+/** Terms for a specific academic year — unlike fetchCurrentYearTerms (always the current year), this backs pickers that operate on a year the user has explicitly chosen (e.g. creating an exam for a past year's class). */
+export async function listTermsForYear(academicYearId: string): Promise<Term[]> {
+  const { data, error } = await supabase
+    .from('terms')
+    .select('id, name, sequence, starts_on, ends_on')
+    .eq('academic_year_id', academicYearId)
+    .order('sequence')
+    .returns<{ id: string; name: string; sequence: number; starts_on: string; ends_on: string }[]>();
+  if (error) throw error;
+  return (data ?? []).map((t) => ({ id: t.id, name: t.name, sequence: t.sequence, startsOn: t.starts_on, endsOn: t.ends_on }));
+}
+
 export type SchoolSettings = {
   schoolName: string;
   attendanceDueAt: string;

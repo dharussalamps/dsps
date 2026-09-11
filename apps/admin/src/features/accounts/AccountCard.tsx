@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Avatar, Button, Card, Icon, StatusPill, TextField } from '@/components';
 import { parseDMY, toDMY } from '@/lib/date';
@@ -33,7 +33,16 @@ type Props = {
   onRevokeRole: (staffRoleId: string, roleName: string, scopeType: string) => void;
   onCreateLogin: () => void;
   isCreatingLogin: boolean;
-  onUpdate: (input: { staffNo: string; fullName: string; phone: string; email?: string; birthDate?: string }) => Promise<void>;
+  onUpdate: (input: {
+    staffNo: string;
+    fullName: string;
+    phone: string;
+    email?: string;
+    address?: string;
+    birthDate?: string;
+    joinedOn?: string;
+  }) => Promise<void>;
+  onDirtyChange?: (dirty: boolean) => void;
 };
 
 /** A staff member's account row: identity, active roles, and inline role-management actions. */
@@ -57,6 +66,7 @@ export function AccountCard({
   onCreateLogin,
   isCreatingLogin,
   onUpdate,
+  onDirtyChange,
 }: Props) {
   const isActive = account.status === 'active';
 
@@ -65,15 +75,35 @@ export function AccountCard({
   const [fullName, setFullName] = useState(account.fullName);
   const [phone, setPhone] = useState(account.phone);
   const [email, setEmail] = useState(account.email ?? '');
+  const [address, setAddress] = useState(account.address ?? '');
   const [birthDate, setBirthDate] = useState(toDMY(account.birthDate));
+  const [joinedOn, setJoinedOn] = useState(toDMY(account.joinedOn));
   const [editSaving, setEditSaving] = useState(false);
+
+  const dirty =
+    isEditing &&
+    (staffNo !== account.staffNo ||
+      fullName !== account.fullName ||
+      phone !== account.phone ||
+      email !== (account.email ?? '') ||
+      address !== (account.address ?? '') ||
+      birthDate !== toDMY(account.birthDate) ||
+      joinedOn !== toDMY(account.joinedOn));
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-notify when dirtiness itself changes; cleanup resets on unmount too.
+  }, [dirty]);
 
   function openEdit() {
     setStaffNo(account.staffNo);
     setFullName(account.fullName);
     setPhone(account.phone);
     setEmail(account.email ?? '');
+    setAddress(account.address ?? '');
     setBirthDate(toDMY(account.birthDate));
+    setJoinedOn(toDMY(account.joinedOn));
     setIsEditing(true);
   }
 
@@ -84,6 +114,11 @@ export function AccountCard({
       Alert.alert('Invalid birth date', 'Enter birth date as DD/MM/YYYY.');
       return;
     }
+    const isoJoinedOn = joinedOn.trim() ? parseDMY(joinedOn) : undefined;
+    if (joinedOn.trim() && !isoJoinedOn) {
+      Alert.alert('Invalid joined date', 'Enter the joined date as DD/MM/YYYY.');
+      return;
+    }
     setEditSaving(true);
     try {
       await onUpdate({
@@ -91,7 +126,9 @@ export function AccountCard({
         fullName: fullName.trim(),
         phone: phone.trim(),
         email: email.trim() || undefined,
+        address: address.trim() || undefined,
         birthDate: isoBirthDate ?? undefined,
+        joinedOn: isoJoinedOn ?? undefined,
       });
       setIsEditing(false);
     } catch (err) {
@@ -180,7 +217,9 @@ export function AccountCard({
           <TextField label="Full name" value={fullName} onChangeText={setFullName} />
           <TextField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
           <TextField label="Email (optional)" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+          <TextField label="Address (optional)" value={address} onChangeText={setAddress} multiline />
           <TextField label="Birth date (optional)" placeholder="DD/MM/YYYY" value={birthDate} onChangeText={setBirthDate} />
+          <TextField label="Joined date (optional)" placeholder="DD/MM/YYYY" value={joinedOn} onChangeText={setJoinedOn} />
           <View style={styles.chipRow}>
             <Button label="Save changes" icon="checkmark" size="sm" onPress={() => void saveEdit()} loading={editSaving} style={{ flex: 1 }} />
             <Button label="Cancel" size="sm" variant="ghost" onPress={() => setIsEditing(false)} />

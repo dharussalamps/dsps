@@ -2,7 +2,8 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, Icon, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, TextField } from '@/components';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { spacing, typography, semantic } from '@/theme/tokens';
@@ -22,6 +23,8 @@ export function EventDetailScreen() {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
 
+  useConfirmDiscardOnLeave(addingToDiary && !!note.trim());
+
   async function saveDiary() {
     if (!staff || !event.data) return;
     setSaving(true);
@@ -38,7 +41,8 @@ export function EventDetailScreen() {
   if (event.isLoading) {
     return (
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="star-outline" bottomIcon="calendar-outline" />
           <ScreenHeader title="Event" tone="onPrimary" back={navigation.canGoBack()} />
         </Hero>
         <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
@@ -48,7 +52,8 @@ export function EventDetailScreen() {
   if (!event.data) {
     return (
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="star-outline" bottomIcon="calendar-outline" />
           <ScreenHeader title="Event" tone="onPrimary" back={navigation.canGoBack()} />
         </Hero>
         <View style={{ padding: spacing.lg }}>
@@ -62,7 +67,8 @@ export function EventDetailScreen() {
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="star-outline" bottomIcon="calendar-outline" />
         <ScreenHeader title={e.title} subtitle={e.startsOn} tone="onPrimary" back={navigation.canGoBack()} />
       </Hero>
       <View style={{ padding: spacing.lg, gap: spacing.lg }}>

@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { addDays, format, parseISO } from 'date-fns';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, Animated, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Avatar, Button, Card, DatePicker, EmptyState, Hero, Icon, Screen, ScreenHeader, StatusPill, SyncStatusBadge, type IconName } from '@/components';
+import { Avatar, Button, Card, DatePicker, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, StatusPill, SyncStatusBadge, type IconName } from '@/components';
 import { useIsPrincipal } from '@/features/accounts/hooks';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, elevation, radius, semantic, spacing, typography } from '@/theme/tokens';
@@ -160,7 +160,8 @@ export function MarkStaffAttendanceScreen() {
   if (board.isLoading) {
     return (
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="clipboard-outline" bottomIcon="checkmark-done-outline" />
           <ScreenHeader title="Staff attendance" tone="onPrimary" back={navigation.canGoBack()} hideBell />
           <DateStrip
             onDate={onDate}
@@ -183,7 +184,8 @@ export function MarkStaffAttendanceScreen() {
   if (!board.data || board.data.length === 0) {
     return (
       <Screen padded={false} edges={['left', 'right']}>
-        <Hero>
+        <Hero style={{ overflow: 'hidden' }}>
+          <HeroDoodle topIcon="clipboard-outline" bottomIcon="checkmark-done-outline" />
           <ScreenHeader title="Staff attendance" tone="onPrimary" back={navigation.canGoBack()} hideBell />
           <DateStrip
             onDate={onDate}
@@ -207,7 +209,8 @@ export function MarkStaffAttendanceScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="clipboard-outline" bottomIcon="checkmark-done-outline" />
         <ScreenHeader title="Staff attendance" tone="onPrimary" back={navigation.canGoBack()} hideBell>
           {submitted.data ? <SyncStatusBadge /> : null}
         </ScreenHeader>

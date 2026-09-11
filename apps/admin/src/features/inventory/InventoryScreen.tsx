@@ -3,7 +3,8 @@ import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { Button, Card, EmptyState, Hero, HeroDoodle, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, semantic, spacing, typography } from '@/theme/tokens';
 import { createInventoryItem } from './api';
@@ -25,6 +26,10 @@ export function InventoryScreen() {
   const [code, setCode] = useState('');
   const [minQuantity, setMinQuantity] = useState('0');
   const [saving, setSaving] = useState(false);
+
+  useConfirmDiscardOnLeave(
+    adding && (!!name.trim() || !!category.trim() || !!location.trim() || !!condition.trim() || !!code.trim() || minQuantity !== '0'),
+  );
 
   async function submit() {
     if (!name.trim() || !category.trim()) return;
@@ -53,7 +58,8 @@ export function InventoryScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="cube-outline" bottomIcon="pricetag-outline" />
         <ScreenHeader title="Inventory" tone="onPrimary" back={navigation.canGoBack()}>
           <Button label={adding ? 'Cancel' : 'Add item'} icon={adding ? 'close' : 'add'} size="sm" variant="secondary" onPress={() => setAdding((v) => !v)} />
         </ScreenHeader>

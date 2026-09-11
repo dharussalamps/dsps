@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Avatar, Button, Card, EmptyState, Hero, Icon, Screen, ScreenHeader, StatusPill } from '@/components';
+import { Avatar, Button, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, StatusPill } from '@/components';
 import type { IconName } from '@/components';
 import type { MarkingStatusRow, StaffAttendanceRow } from './api';
 import type { RootStackParamList } from '@/navigation/types';
@@ -49,7 +49,8 @@ export function AttendanceBoardScreen() {
 
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
-      <Hero>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="clipboard-outline" bottomIcon="checkmark-done-outline" />
         <ScreenHeader title="Attendance board" subtitle={format(parseISO(onDate), 'EEEE, d MMMM')} tone="onPrimary" />
 
         <SegmentedControl

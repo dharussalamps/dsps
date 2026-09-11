@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { Linking, View } from 'react-native';
+import { Linking, View, type ViewStyle } from 'react-native';
 import { Button, TextField } from '@/components';
 import { useAuthStore } from '@/store/authStore';
 import { spacing } from '@/theme/tokens';
 import { logCall } from './api';
 
-type Props = { studentId: string; guardianId?: string; phone: string };
+type Props = { studentId: string; guardianId?: string; phone: string; style?: ViewStyle };
 
 /**
  * FR-STU-07/08: "a permitted user may place a telephone call to a guardian
@@ -16,7 +16,7 @@ type Props = { studentId: string; guardianId?: string; phone: string };
  * doesn't exist — the same practical compromise most call-logging mobile
  * apps make.
  */
-export function GuardianCallButton({ studentId, guardianId, phone }: Props) {
+export function GuardianCallButton({ studentId, guardianId, phone, style }: Props) {
   const staff = useAuthStore((s) => s.staff);
   const [prompting, setPrompting] = useState(false);
   const [purpose, setPurpose] = useState('');
@@ -41,7 +41,7 @@ export function GuardianCallButton({ studentId, guardianId, phone }: Props) {
 
   if (prompting) {
     return (
-      <View style={{ gap: spacing.xs, minWidth: 180 }}>
+      <View style={[{ gap: spacing.xs, minWidth: 180 }, style]}>
         <TextField placeholder="Purpose of the call (optional)" value={purpose} onChangeText={setPurpose} autoFocus />
         <View style={{ flexDirection: 'row', gap: spacing.xs }}>
           <Button label="Save" size="sm" onPress={() => void save()} loading={saving} />
@@ -51,5 +51,5 @@ export function GuardianCallButton({ studentId, guardianId, phone }: Props) {
     );
   }
 
-  return <Button label="" accessibilityLabel="Call" icon="call" size="sm" variant="outline" onPress={call} />;
+  return <Button label="" accessibilityLabel="Call" icon="call" size="sm" variant="outline" onPress={call} style={style} />;
 }
