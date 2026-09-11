@@ -30,10 +30,11 @@ export function LeaveAllocationScreen() {
   const navigation = useNavigation();
   const years = useAcademicYears();
   const leaveTypes = useLeaveTypes();
-  // Only casual, medical and maternity leave carry an admin-set annual
-  // entitlement — duty and half-day leave are never allocated a balance,
-  // and short leave's cap is a fixed monthly constant, not admin-set here.
-  const allocatableLeaveTypes = leaveTypes.data?.filter((t) => t.key === 'casual' || t.key === 'medical' || t.key === 'maternity');
+  // Only casual and medical leave carry an admin-set annual entitlement —
+  // duty and half-day leave are never allocated a balance; short leave's
+  // cap is a fixed monthly constant; maternity's 84/84/84-day phases are a
+  // fixed system rule computed automatically, not admin-set here either.
+  const allocatableLeaveTypes = leaveTypes.data?.filter((t) => t.key === 'casual' || t.key === 'medical');
   const [pickedYearId, setPickedYearId] = useState<string | undefined>(undefined);
   const [pickedLeaveTypeId, setPickedLeaveTypeId] = useState<string | undefined>(undefined);
 

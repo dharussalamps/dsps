@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchCalendarDay, fetchCurrentYearTerms, fetchSchoolSettings, fetchWorkingWeekdays, listAcademicYears, listTermsForYear } from './api';
+import { fetchCalendarDay, fetchCurrentYearTerms, fetchSchoolSettings, fetchWorkingWeekdays, listAcademicYears, listCalendarDaysInRange, listTermsForYear } from './api';
 
 export function useCurrentYearTerms() {
   return useQuery({ queryKey: ['calendar', 'terms'], queryFn: fetchCurrentYearTerms });
@@ -27,4 +27,13 @@ export function useSchoolSettings() {
 
 export function useCalendarDay(onDate: string) {
   return useQuery({ queryKey: ['calendar', 'day', onDate], queryFn: () => fetchCalendarDay(onDate) });
+}
+
+export function useCalendarDaysInRange(startIso: string | undefined, endIso: string | undefined) {
+  return useQuery({
+    queryKey: ['calendar', 'days-range', startIso, endIso],
+    queryFn: () => listCalendarDaysInRange(startIso as string, endIso as string),
+    enabled: !!startIso && !!endIso,
+    staleTime: 5 * 60_000,
+  });
 }

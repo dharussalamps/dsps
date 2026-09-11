@@ -118,6 +118,15 @@ export async function setCalendarDay(onDate: string, dayType: CalendarDayType, l
   if (error) throw error;
 }
 
+export type CalendarDayEntry = { onDate: string; dayType: CalendarDayType; label: string | null };
+
+/** Every explicit calendar_days row (holidays, closures, half days, exams) in a date range — used to mark a date picker with the academic calendar rather than fetching is_school_day() one date at a time. Days with no row here fall back to the working-weekday/term rule (see useWorkingWeekdays/useCurrentYearTerms and is_school_day() in 20260907100003_is_school_day.sql). */
+export async function listCalendarDaysInRange(startIso: string, endIso: string): Promise<CalendarDayEntry[]> {
+  const { data, error } = await supabase.from('calendar_days').select('on_date, day_type, label').gte('on_date', startIso).lte('on_date', endIso);
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ onDate: r.on_date, dayType: r.day_type as CalendarDayType, label: r.label }));
+}
+
 /** FR-CAL-06: cancels the day's attendance obligations, excludes it from summaries, and notifies all staff — all server-side (declare_closure()). */
 export async function declareClosure(onDate: string, label?: string): Promise<void> {
   const { error } = await supabase.rpc('declare_closure', { p_date: onDate, p_label: label || null });

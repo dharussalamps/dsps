@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchLeaveAllocations,
   fetchLeaveRequestDetail,
+  fetchMaternityChainTip,
   fetchMyLeaveBalances,
   fetchMyLeaveRequests,
   fetchPendingLeaveRequests,
@@ -54,6 +55,14 @@ export function useSetLeaveBalance() {
       void queryClient.invalidateQueries({ queryKey: ['leave', 'allocations'] });
       void queryClient.invalidateQueries({ queryKey: ['leave', 'balances'] });
     },
+  });
+}
+
+export function useMaternityChainTip(staffId: string | undefined) {
+  return useQuery({
+    queryKey: ['leave', 'maternity-tip', staffId],
+    queryFn: () => fetchMaternityChainTip(staffId as string),
+    enabled: !!staffId,
   });
 }
 
