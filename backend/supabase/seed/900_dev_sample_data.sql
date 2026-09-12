@@ -23,6 +23,68 @@ from (values
 ) as v(name, sequence, starts_on, ends_on)
 on conflict (academic_year_id, sequence) do nothing;
 
+-- A previous academic year with its own three terms, so the Analytics
+-- screen's year/term picker has more than just the current year to switch
+-- between during development.
+insert into academic_years (label, starts_on, ends_on, is_current) values
+  ('2025', '2025-01-06', '2025-12-05', false)
+on conflict (label) do nothing;
+
+insert into terms (academic_year_id, name, sequence, starts_on, ends_on)
+select (select id from academic_years where label = '2025'), v.name, v.sequence, v.starts_on::date, v.ends_on::date
+from (values
+  ('Term 1', 1, '2025-01-06', '2025-04-04'),
+  ('Term 2', 2, '2025-04-28', '2025-08-08'),
+  ('Term 3', 3, '2025-09-01', '2025-12-05')
+) as v(name, sequence, starts_on, ends_on)
+on conflict (academic_year_id, sequence) do nothing;
+
+-- School-wide and per-grade attendance summaries for 2025's terms, so those
+-- past terms show real numbers in Analytics instead of "not yet computed" —
+-- the nightly recompute job only ever writes the *current* term's row, so a
+-- past year's history has to be seeded directly like this. scope_id is null
+-- for the school-wide row, and null isn't caught by the table's own unique
+-- constraint on re-run, hence the `where not exists` guard instead of
+-- `on conflict` here.
+insert into attendance_summaries (scope_type, scope_id, term_id, school_days, present_days, pct)
+select 'school', null, t.id, v.school_days, v.present_days, round(v.present_days::numeric / v.school_days * 100, 2)
+from terms t
+join academic_years ay on ay.id = t.academic_year_id and ay.label = '2025'
+join (values
+  ('Term 1', 58, 55),
+  ('Term 2', 70, 61),
+  ('Term 3', 62, 59)
+) as v(term_name, school_days, present_days) on v.term_name = t.name
+where not exists (
+  select 1 from attendance_summaries s where s.scope_type = 'school' and s.scope_id is null and s.term_id = t.id
+);
+
+insert into attendance_summaries (scope_type, scope_id, term_id, school_days, present_days, pct)
+select 'grade', g.id, t.id, v.school_days, v.present_days, round(v.present_days::numeric / v.school_days * 100, 2)
+from terms t
+join academic_years ay on ay.id = t.academic_year_id and ay.label = '2025'
+join grades g on true
+join (values
+  ('Term 1', 1, 58, 56),
+  ('Term 1', 2, 58, 52),
+  ('Term 1', 3, 58, 54),
+  ('Term 1', 4, 58, 44),
+  ('Term 1', 5, 58, 57),
+  ('Term 2', 1, 70, 66),
+  ('Term 2', 2, 70, 60),
+  ('Term 2', 3, 70, 63),
+  ('Term 2', 4, 70, 53),
+  ('Term 2', 5, 70, 68),
+  ('Term 3', 1, 62, 60),
+  ('Term 3', 2, 62, 57),
+  ('Term 3', 3, 62, 45),
+  ('Term 3', 4, 62, 50),
+  ('Term 3', 5, 62, 61)
+) as v(term_name, grade_number, school_days, present_days) on v.term_name = t.name and v.grade_number = g.number
+where not exists (
+  select 1 from attendance_summaries s where s.scope_type = 'grade' and s.scope_id = g.id and s.term_id = t.id
+);
+
 -- Holiday, half day and exam day inside the current term (Term 3).
 insert into calendar_days (on_date, day_type, label) values
   ('2026-09-04', 'holiday',  'School Holiday'),

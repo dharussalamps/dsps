@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActivityIndicator, Alert, FlatList, Text, View } from 'react-native';
 import { Button, Card, EmptyState, Hero, HeroDoodle, Screen, ScreenHeader, StatusPill } from '@/components';
+import { useOpenDrawer } from '@/navigation/DrawerContext';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { semantic, spacing, typography } from '@/theme/tokens';
@@ -13,6 +14,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export function AnnouncementsScreen() {
   const navigation = useNavigation<Nav>();
+  const openDrawer = useOpenDrawer();
   const staff = useAuthStore((s) => s.staff);
   const announcements = useAnnouncements(staff?.id);
   const queryClient = useQueryClient();
@@ -27,7 +29,7 @@ export function AnnouncementsScreen() {
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
       <Hero style={{ overflow: 'hidden' }}>
         <HeroDoodle topIcon="megaphone-outline" bottomIcon="chatbubble-ellipses-outline" />
-        <ScreenHeader title="Announcements" tone="onPrimary">
+        <ScreenHeader title="Announcements" tone="onPrimary" onMenuPress={openDrawer}>
           <Button label="New" icon="add" size="sm" variant="secondary" onPress={() => navigation.navigate('ComposeAnnouncement')} />
         </ScreenHeader>
       </Hero>

@@ -3,6 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Avatar, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SegmentedControl, StatusPill } from '@/components';
+import { useOpenDrawer } from '@/navigation/DrawerContext';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, elevation, minTapTarget, radius, semantic, spacing, typography } from '@/theme/tokens';
 import { todayIso } from '@/features/attendance/hooks';
@@ -22,6 +23,8 @@ const TABS: { key: Tab; label: string; icon: 'people-outline' | 'ribbon-outline'
 
 export function StaffDirectoryScreen() {
   const navigation = useNavigation<Nav>();
+  const openDrawer = useOpenDrawer();
+  const canGoBack = navigation.canGoBack();
   const [query, setQuery] = useState('');
   const [tab, setTab] = useState<Tab>('people');
   const staff = useStaffDirectory(query);
@@ -33,7 +36,12 @@ export function StaffDirectoryScreen() {
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
       <Hero style={{ overflow: 'hidden' }}>
         <HeroDoodle topIcon="briefcase-outline" bottomIcon="people-outline" />
-        <ScreenHeader title="Staff directory" tone="onPrimary" back={navigation.canGoBack()} />
+        <ScreenHeader
+          title="Staff directory"
+          tone="onPrimary"
+          back={canGoBack}
+          onMenuPress={canGoBack ? undefined : openDrawer}
+        />
 
         <SegmentedControl value={tab} onChange={setTab} options={TABS} />
       </Hero>

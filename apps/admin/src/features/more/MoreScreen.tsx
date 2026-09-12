@@ -1,15 +1,24 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { Avatar, Card, Hero, HeroDoodle, Icon, Screen, ScreenHeader, type IconName } from '@/components';
-import { Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Card, Hero, HeroDoodle, Icon, Screen, ScreenHeader, type IconName } from '@/components';
+import { useOpenDrawer } from '@/navigation/DrawerContext';
 import type { RootStackParamList } from '@/navigation/types';
-import { useAuthStore } from '@/store/authStore';
-import { colors, semantic, spacing, typography } from '@/theme/tokens';
+import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 type MenuItem = { label: string; route: keyof RootStackParamList; icon: IconName };
+type Tint = { fg: string; bg: string };
+
+const tints = {
+  gold: { fg: colors.gold700, bg: semantic.secondaryMuted },
+  teal: { fg: colors.teal700, bg: 'rgba(79, 184, 176, 0.16)' },
+  info: { fg: colors.info, bg: colors.infoBg },
+} as const satisfies Record<string, Tint>;
+
+type Group = { title: string; icon: IconName; tint: Tint; items: MenuItem[] };
 
 // AdminSpec.md section 10: "More | permission-filtered menu with badges".
 // Every entry is shown for now — filtering by the signed-in staff member's
@@ -17,79 +26,113 @@ type MenuItem = { label: string; route: keyof RootStackParamList; icon: IconName
 // see docs/AdminSpec.md section 17. The data-entry screens (Request leave, Assign
 // cover teacher, Inventory, Events, School diary) moved to the Home screen's
 // left drawer — see DataEntryDrawer.tsx.
-const menu: MenuItem[] = [
-  { label: 'Staff directory', route: 'StaffDirectory', icon: 'people-outline' },
-  { label: 'Set class', route: 'SetClass', icon: 'swap-horizontal-outline' },
-  { label: 'Leave requests', route: 'LeaveRequests', icon: 'checkmark-done-outline' },
-  { label: 'Leave allocation', route: 'LeaveAllocation', icon: 'calendar-outline' },
-  { label: 'Marks review', route: 'MarksReview', icon: 'document-text-outline' },
-  { label: 'Exams & marks', route: 'Exams', icon: 'school-outline' },
-  { label: 'Academic calendar', route: 'AcademicCalendar', icon: 'calendar-outline' },
-  { label: 'Classes, subjects & terms', route: 'AcademicStructure', icon: 'layers-outline' },
-  { label: 'Analytics', route: 'Analytics', icon: 'stats-chart-outline' },
-  { label: 'Staff accounts', route: 'UserAccounts', icon: 'key-outline' },
-  { label: 'Audit log', route: 'AuditLog', icon: 'time-outline' },
-  { label: 'Notifications', route: 'Notifications', icon: 'notifications-outline' },
-  { label: 'Settings', route: 'Settings', icon: 'settings-outline' },
+const groups: Group[] = [
+  {
+    title: 'Leave & attendance',
+    icon: 'checkmark-done-outline',
+    tint: tints.teal,
+    items: [
+      { label: 'Staff attendance', route: 'MarkStaffAttendance', icon: 'checkmark-circle-outline' },
+      { label: 'Leave requests', route: 'LeaveRequests', icon: 'checkmark-done-outline' },
+      { label: 'Assign cover teacher', route: 'AssignCover', icon: 'swap-horizontal-outline' },
+    ],
+  },
+  {
+    title: 'Academics',
+    icon: 'school-outline',
+    tint: tints.gold,
+    items: [{ label: 'Exams & marks', route: 'Exams', icon: 'school-outline' }],
+  },
+  {
+    title: 'Insights',
+    icon: 'stats-chart-outline',
+    tint: tints.info,
+    items: [
+      { label: 'Analytics', route: 'Analytics', icon: 'stats-chart-outline' },
+      { label: 'Audit log', route: 'AuditLog', icon: 'time-outline' },
+    ],
+  },
 ];
 
 export function MoreScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<Nav>();
-  const staff = useAuthStore((s) => s.staff);
-  const signOut = useAuthStore((s) => s.signOut);
+  const openDrawer = useOpenDrawer();
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
       <Hero style={{ overflow: 'hidden' }}>
         <HeroDoodle topIcon="grid-outline" bottomIcon="school-outline" />
-        <ScreenHeader title={t('nav.more')} tone="onPrimary" />
-        {staff ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.xs }}>
-            <Avatar name={staff.fullName} tone="onPrimary" size={48} />
-            <View>
-              <Text style={{ ...typography.subtitle, color: colors.white }}>{staff.fullName}</Text>
-              <Text style={{ ...typography.caption, color: colors.cream100 }}>{staff.staffNo}</Text>
-            </View>
-          </View>
-        ) : null}
+        <ScreenHeader
+          title={t('nav.more')}
+          subtitle="Tools, records & settings"
+          tone="onPrimary"
+          onMenuPress={openDrawer}
+        />
       </Hero>
 
-      <View style={{ padding: spacing.lg, gap: spacing.sm }}>
-        {menu.map((item) => (
-          <Card key={item.route} onPress={() => navigation.navigate(item.route as never)} flat style={styles.row}>
-            <View style={styles.rowContent}>
-              <View style={styles.iconWrap}>
-                <Icon name={item.icon} size={19} color={semantic.primary} />
-              </View>
-              <Text style={{ ...typography.body, color: semantic.textPrimary, flex: 1 }}>{item.label}</Text>
-              <Icon name="chevron-forward" size={18} color={colors.ink300} />
-            </View>
-          </Card>
+      <View style={styles.body}>
+        {groups.map((group) => (
+          <MenuGroup key={group.title} group={group} onNavigate={(route) => navigation.navigate(route as never)} />
         ))}
-
-        <Card onPress={() => void signOut()} flat style={styles.row}>
-          <View style={styles.rowContent}>
-            <View style={[styles.iconWrap, { backgroundColor: colors.errorBg }]}>
-              <Icon name="log-out-outline" size={19} color={colors.error} />
-            </View>
-            <Text style={{ ...typography.body, color: colors.error, flex: 1 }}>{t('common.signOut')}</Text>
-          </View>
-        </Card>
       </View>
     </Screen>
   );
 }
 
-const styles = {
-  row: { padding: spacing.md },
-  rowContent: { flexDirection: 'row', alignItems: 'center', gap: spacing.md } as const,
+function MenuGroup({ group, onNavigate }: { group: Group; onNavigate: (route: keyof RootStackParamList) => void }) {
+  return (
+    <View style={{ gap: spacing.sm }}>
+      <View style={styles.groupHeader}>
+        <View style={[styles.groupIconChip, { backgroundColor: group.tint.bg }]}>
+          <Icon name={group.icon} size={13} color={group.tint.fg} />
+        </View>
+        <Text style={styles.groupTitle}>{group.title.toUpperCase()}</Text>
+      </View>
+      <Card flat style={styles.groupCard}>
+        {group.items.map((item, idx) => (
+          <Pressable
+            key={item.route}
+            onPress={() => onNavigate(item.route)}
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.row,
+              idx < group.items.length - 1 && styles.rowDivider,
+              pressed && styles.pressed,
+            ]}
+          >
+            <View style={[styles.iconWrap, { backgroundColor: group.tint.bg }]}>
+              <Icon name={item.icon} size={18} color={group.tint.fg} />
+            </View>
+            <Text style={{ ...typography.body, color: semantic.textPrimary, flex: 1 }}>{item.label}</Text>
+            <Icon name="chevron-forward" size={18} color={colors.ink300} />
+          </Pressable>
+        ))}
+      </Card>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  body: { padding: spacing.lg, gap: spacing.xl },
+  groupHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingLeft: spacing.xs },
+  groupIconChip: {
+    width: 22,
+    height: 22,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupTitle: { ...typography.captionStrong, color: semantic.textSecondary, letterSpacing: 0.4 },
+  groupCard: { padding: 0, gap: 0, overflow: 'hidden' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
+  rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: semantic.border },
   iconWrap: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: semantic.primaryMuted,
     alignItems: 'center',
     justifyContent: 'center',
-  } as const,
-} as const;
+  },
+  pressed: { opacity: 0.7 },
+});

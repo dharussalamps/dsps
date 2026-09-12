@@ -7,6 +7,7 @@ import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from '
 import { Avatar, Button, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, StatusPill } from '@/components';
 import type { IconName } from '@/components';
 import type { MarkingStatusRow, StaffAttendanceRow } from './api';
+import { useOpenDrawer } from '@/navigation/DrawerContext';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, minTapTarget, radius, semantic, spacing, typography } from '@/theme/tokens';
 import { remindUnmarkedClass, remindUnmarkedClassesBulk } from './api';
@@ -32,6 +33,7 @@ const staffStatusLabel: Record<string, string> = {
 
 export function AttendanceBoardScreen() {
   const navigation = useNavigation<Nav>();
+  const openDrawer = useOpenDrawer();
   const onDate = todayIso();
   const [tab, setTab] = useState<Tab>('students');
 
@@ -51,7 +53,12 @@ export function AttendanceBoardScreen() {
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
       <Hero style={{ overflow: 'hidden' }}>
         <HeroDoodle topIcon="clipboard-outline" bottomIcon="checkmark-done-outline" />
-        <ScreenHeader title="Attendance board" subtitle={format(parseISO(onDate), 'EEEE, d MMMM')} tone="onPrimary" />
+        <ScreenHeader
+          title="Attendance board"
+          subtitle={format(parseISO(onDate), 'EEEE, d MMMM')}
+          tone="onPrimary"
+          onMenuPress={openDrawer}
+        />
 
         <SegmentedControl
           value={tab}

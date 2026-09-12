@@ -1,6 +1,6 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Constants from 'expo-constants';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Avatar, Card, Hero, HeroDoodle, Icon, type IconName } from '@/components';
 import { useMyRoleKeys } from '@/features/accounts/hooks';
 import type { RootStackParamList } from '@/navigation/types';
@@ -16,9 +16,7 @@ const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
 // The recording/entry screens that used to live in the More tab — pulled out
 // so they're one tap from Home instead of buried in that catch-all list.
 export const dataEntryMenu: MenuItem[] = [
-  { label: 'Staff attendance', route: 'MarkStaffAttendance', icon: 'checkmark-circle-outline' },
   { label: 'Request leave', route: 'MyLeave', icon: 'briefcase-outline' },
-  { label: 'Assign cover teacher', route: 'AssignCover', icon: 'swap-horizontal-outline' },
   { label: 'Inventory', route: 'Inventory', icon: 'cube-outline' },
   { label: 'Events', route: 'EventCalendar', icon: 'calendar-outline' },
   { label: 'School diary', route: 'Diary', icon: 'book-outline' },
@@ -41,7 +39,15 @@ export function DataEntryDrawerContent({ navigation, onClose }: { navigation: Na
       <Hero style={styles.hero}>
         <HeroDoodle topIcon="ribbon-outline" bottomIcon="briefcase-outline" />
         {staff ? (
-          <View style={styles.identity}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="View my profile"
+            onPress={() => {
+              onClose();
+              navigation.navigate('StaffProfile', { staffId: staff.id });
+            }}
+            style={({ pressed }) => [styles.identity, pressed && styles.identityPressed]}
+          >
             <Avatar name={staff.fullName} tone="onPrimary" size={56} style={styles.avatar} />
             <View style={styles.identityText}>
               <Text style={styles.name} numberOfLines={1}>
@@ -59,11 +65,12 @@ export function DataEntryDrawerContent({ navigation, onClose }: { navigation: Na
                 </View>
               ) : null}
             </View>
-          </View>
+            <Icon name="chevron-forward" size={18} color="rgba(255,255,255,0.75)" />
+          </Pressable>
         ) : null}
       </Hero>
 
-      <ScrollView contentContainerStyle={styles.menuWrap} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.menuScroll} contentContainerStyle={styles.menuWrap} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>DSPS OFFICE</Text>
         {dataEntryMenu.map((item) => (
           <Card
@@ -86,6 +93,25 @@ export function DataEntryDrawerContent({ navigation, onClose }: { navigation: Na
         ))}
       </ScrollView>
 
+      <View style={styles.pinnedSection}>
+        <Card
+          flat
+          style={styles.menuCard}
+          onPress={() => {
+            onClose();
+            navigation.navigate('Settings' as never);
+          }}
+        >
+          <View style={styles.menuRow}>
+            <View style={styles.iconWrap}>
+              <Icon name="settings-outline" size={18} color={semantic.primary} />
+            </View>
+            <Text style={styles.menuLabel}>Settings</Text>
+            <Icon name="chevron-forward" size={16} color={colors.ink300} />
+          </View>
+        </Card>
+      </View>
+
       <View style={styles.footer}>
         <Icon name="school-outline" size={14} color={semantic.textSecondary} />
         <Text style={styles.footerText}>DSPS Office · v{APP_VERSION}</Text>
@@ -98,6 +124,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: semantic.background },
   hero: { paddingHorizontal: spacing.lg, overflow: 'hidden', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
   identity: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  identityPressed: { opacity: 0.85 },
   avatar: { borderWidth: 2, borderColor: 'rgba(255,255,255,0.6)' },
   identityText: { flex: 1, gap: 2 },
   name: { ...typography.subtitle, color: colors.white },
@@ -113,6 +140,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   roleChipLabel: { ...typography.captionStrong, color: colors.gold900, fontSize: 11 },
+  menuScroll: { flex: 1 },
   menuWrap: { padding: spacing.lg, gap: spacing.sm },
   sectionLabel: { ...typography.captionStrong, color: semantic.textSecondary, marginBottom: spacing.xs },
   menuCard: { padding: spacing.md },
@@ -126,6 +154,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   menuLabel: { ...typography.body, color: semantic.textPrimary, flex: 1 },
+  pinnedSection: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    gap: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: semantic.border,
+  },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',

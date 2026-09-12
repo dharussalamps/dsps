@@ -1,14 +1,18 @@
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { useEffect, useState } from 'react';
-import { Alert, Platform, Text, View } from 'react-native';
-import { Button, Card, Hero, HeroDoodle, Screen, ScreenHeader, StatusPill } from '@/components';
+import { Alert, Platform, Pressable, Text, View } from 'react-native';
+import { Button, Card, Hero, HeroDoodle, Icon, Screen, ScreenHeader, StatusPill, type IconName } from '@/components';
 import { isBiometricAvailable, isBiometricUnlockEnabled, setBiometricUnlockEnabled } from '@/lib/biometrics';
 import { hasUnsyncedOperations } from '@/lib/offline';
+import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
-import { semantic, spacing, typography } from '@/theme/tokens';
+import { colors, semantic, spacing, typography } from '@/theme/tokens';
 import { registerDevice } from './api';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 /**
  * section 10 Settings: "own profile, notification preferences, language".
@@ -16,7 +20,7 @@ import { registerDevice } from './api';
  * infrastructure exists, but only one bundle ships).
  */
 export function SettingsScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<Nav>();
   const staff = useAuthStore((s) => s.staff);
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
@@ -148,6 +152,15 @@ export function SettingsScreen() {
         <Text style={{ ...typography.body, color: semantic.textPrimary }}>English</Text>
       </Card>
 
+      <Card>
+        <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>ADMINISTRATION</Text>
+        <SettingsLinkRow icon="key-outline" label="Staff accounts" onPress={() => navigation.navigate('UserAccounts')} />
+        <SettingsLinkRow icon="calendar-outline" label="Leave allocation" onPress={() => navigation.navigate('LeaveAllocation')} />
+        <SettingsLinkRow icon="swap-horizontal-outline" label="Set class" onPress={() => navigation.navigate('SetClass')} />
+        <SettingsLinkRow icon="calendar-outline" label="Academic calendar" onPress={() => navigation.navigate('AcademicCalendar')} />
+        <SettingsLinkRow icon="layers-outline" label="Classes, subjects & terms" onPress={() => navigation.navigate('AcademicStructure')} />
+      </Card>
+
       <Button label="Sign out" variant="danger" onPress={() => void confirmSignOut()} loading={signingOut} />
       </View>
     </Screen>
@@ -160,5 +173,28 @@ function Row({ label, value }: { label: string; value: string }) {
       <Text style={{ ...typography.body, color: semantic.textSecondary }}>{label}</Text>
       <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>{value}</Text>
     </View>
+  );
+}
+
+function SettingsLinkRow({ icon, label, onPress }: { icon: IconName; label: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.xs }}>
+        <View
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 9,
+            backgroundColor: semantic.primaryMuted,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Icon name={icon} size={16} color={semantic.primary} />
+        </View>
+        <Text style={{ ...typography.body, color: semantic.textPrimary, flex: 1 }}>{label}</Text>
+        <Icon name="chevron-forward" size={16} color={colors.ink300} />
+      </View>
+    </Pressable>
   );
 }

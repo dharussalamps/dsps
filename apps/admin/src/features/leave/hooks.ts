@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  fetchCoverAssignmentsByYear,
   fetchLeaveAllocations,
   fetchLeaveRequestDetail,
   fetchLeaveRequestsByStatus,
@@ -9,6 +10,7 @@ import {
   fetchMyLeaveRequests,
   fetchPendingLeaveRequests,
   listLeaveTypes,
+  removeCoverAssignment,
   setLeaveBalance,
   setLeaveBalancesForAll,
 } from './api';
@@ -82,6 +84,22 @@ export function useMaternityChainTip(staffId: string | undefined) {
     queryKey: ['leave', 'maternity-tip', staffId],
     queryFn: () => fetchMaternityChainTip(staffId as string),
     enabled: !!staffId,
+  });
+}
+
+/** Backs AssignCoverScreen's "Assigned" tab, one academic year at a time (or every assignment ever made when yearRange is omitted) — same year-scoping shape as useLeaveRequestsByStatus. */
+export function useCoverAssignments(yearRange?: { startsOn: string; endsOn: string }) {
+  return useQuery({
+    queryKey: ['leave', 'cover-assignments', yearRange?.startsOn, yearRange?.endsOn],
+    queryFn: () => fetchCoverAssignmentsByYear(yearRange?.startsOn, yearRange?.endsOn),
+  });
+}
+
+export function useRemoveCoverAssignment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: removeCoverAssignment,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['leave', 'cover-assignments'] }),
   });
 }
 

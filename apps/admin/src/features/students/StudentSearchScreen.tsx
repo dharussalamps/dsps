@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader } from '@/components';
 import { useCanCreateStudents } from '@/features/accounts/hooks';
+import { useOpenDrawer } from '@/navigation/DrawerContext';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, elevation, minTapTarget, radius, semantic, spacing, typography } from '@/theme/tokens';
 import type { ClassSummary } from './api';
@@ -30,6 +31,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export function StudentSearchScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation<Nav>();
+  const openDrawer = useOpenDrawer();
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<Scope | null>(null);
   const hasQuery = query.trim().length >= 2;
@@ -51,7 +53,7 @@ export function StudentSearchScreen() {
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
       <Hero style={{ overflow: 'hidden' }}>
         <HeroDoodle topIcon="school-outline" bottomIcon="people-outline" />
-        <ScreenHeader title={t('nav.students')} tone="onPrimary">
+        <ScreenHeader title={t('nav.students')} tone="onPrimary" onMenuPress={openDrawer}>
           {canCreateStudents ? (
             <Pressable
               accessibilityRole="button"

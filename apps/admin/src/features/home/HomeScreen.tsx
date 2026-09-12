@@ -1,9 +1,8 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
-import { DrawerLayout } from 'react-native-gesture-handler';
 import { Avatar, Button, Card, Hero, HeroDoodle, Icon, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
 import { fetchStudentsAtRisk } from '@/features/analytics/api';
 import { remindUnmarkedClassesBulk } from '@/features/attendance/api';
@@ -15,10 +14,10 @@ import { usePendingLeaveRequests } from '@/features/leave/hooks';
 import { useOutstandingMarkSheets } from '@/features/marks/hooks';
 import { fetchResponsibilitiesForStaff } from '@/features/staff/api';
 import { parseDMY, toDMY } from '@/lib/date';
+import { useOpenDrawer } from '@/navigation/DrawerContext';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { colors, semantic, spacing, typography } from '@/theme/tokens';
-import { DataEntryDrawerContent } from './DataEntryDrawer';
 import { useClassesNeedingCover, useMyClasses, useIsSchoolDayToday } from './hooks';
 import { MyClassAttendanceCard } from './MyClassAttendanceCard';
 
@@ -49,7 +48,7 @@ function getGreeting(now: Date, birthDate?: string | null): { title: string; sub
  */
 export function HomeScreen() {
   const navigation = useNavigation<Nav>();
-  const drawerRef = useRef<DrawerLayout>(null);
+  const openDrawer = useOpenDrawer();
   const staff = useAuthStore((s) => s.staff);
   const isSchoolDay = useIsSchoolDayToday();
   const myClasses = useMyClasses(staff?.id);
@@ -86,98 +85,89 @@ export function HomeScreen() {
   const totalStaff = staffBoard.data?.length ?? 0;
 
   return (
-    <DrawerLayout
-      ref={drawerRef}
-      drawerWidth={280}
-      drawerPosition="left"
-      renderNavigationView={() => (
-        <DataEntryDrawerContent navigation={navigation} onClose={() => drawerRef.current?.closeDrawer()} />
-      )}
-    >
-      <Screen padded={false} edges={['left', 'right']}>
-        <Hero style={{ overflow: 'hidden' }}>
-          <HeroDoodle topIcon="ribbon-outline" bottomIcon="school-outline" />
-          <ScreenHeader
-            title={greeting.title}
-            subtitle={greeting.subtitle}
-            onMenuPress={() => drawerRef.current?.openDrawer()}
-            tone="onPrimary"
-          >
-            {staff ? (
-              <Avatar
-                name={staff.fullName}
-                tone="onPrimary"
-                size={32}
-                onPress={() => navigation.navigate('StaffProfile', { staffId: staff.id })}
-              />
-            ) : null}
-          </ScreenHeader>
+    <Screen padded={false} edges={['left', 'right']}>
+      <Hero style={{ overflow: 'hidden' }}>
+        <HeroDoodle topIcon="ribbon-outline" bottomIcon="school-outline" />
+        <ScreenHeader
+          title={greeting.title}
+          subtitle={greeting.subtitle}
+          onMenuPress={openDrawer}
+          tone="onPrimary"
+        >
+          {staff ? (
+            <Avatar
+              name={staff.fullName}
+              tone="onPrimary"
+              size={32}
+              onPress={() => navigation.navigate('StaffProfile', { staffId: staff.id })}
+            />
+          ) : null}
+        </ScreenHeader>
 
-          {loading ? (
-            <ActivityIndicator color={colors.white} style={{ marginTop: spacing.xl }} />
-          ) : !isSchoolDay.data ? (
-            <Card style={{ marginTop: spacing.lg, paddingVertical: spacing.md }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs }}>
-                <Icon name="moon-outline" size={16} color={semantic.textPrimary} />
-                <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>Not a school day</Text>
-              </View>
-            </Card>
-          ) : (
-            <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
-              {myClasses.data?.map((c) => (
-                <MyClassAttendanceCard key={c.classId} myClass={c} />
-              ))}
+        {loading ? (
+          <ActivityIndicator color={colors.white} style={{ marginTop: spacing.xl }} />
+        ) : !isSchoolDay.data ? (
+          <Card style={{ marginTop: spacing.lg, paddingVertical: spacing.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs }}>
+              <Icon name="moon-outline" size={16} color={semantic.textPrimary} />
+              <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>Not a school day</Text>
             </View>
-          )}
-        </Hero>
+          </Card>
+        ) : (
+          <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
+            {myClasses.data?.map((c) => (
+              <MyClassAttendanceCard key={c.classId} myClass={c} />
+            ))}
+          </View>
+        )}
+      </Hero>
 
-        <View style={styles.body}>
-          {unmarked.length > 0 ? <UnmarkedClassesCard classes={unmarked} onDate={onDate} /> : null}
+      <View style={styles.body}>
+        {unmarked.length > 0 ? <UnmarkedClassesCard classes={unmarked} onDate={onDate} /> : null}
 
-          {totalStaff > 0 || pendingLeave.data?.length ? (
-            <Card>
-              <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>SCHOOL PULSE</Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingVertical: spacing.sm }}>
-                {totalStaff > 0 ? <Metric label="Staff present" value={`${presentStaff}/${totalStaff}`} /> : null}
-                <Metric label="Approvals pending" value={String(pendingLeave.data?.length ?? 0)} onPress={() => navigation.navigate('LeaveRequests')} />
+        {totalStaff > 0 || pendingLeave.data?.length ? (
+          <Card>
+            <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>SCHOOL PULSE</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingVertical: spacing.sm }}>
+              {totalStaff > 0 ? <Metric label="Staff present" value={`${presentStaff}/${totalStaff}`} /> : null}
+              <Metric label="Approvals pending" value={String(pendingLeave.data?.length ?? 0)} onPress={() => navigation.navigate('LeaveRequests')} />
+            </View>
+          </Card>
+        ) : null}
+
+        <NeedsAttention
+          pendingLeaveCount={pendingLeave.data?.length ?? 0}
+          atRiskCount={atRisk.data?.length ?? 0}
+          needsCoverCount={needsCover.data?.length ?? 0}
+          lowStockCount={lowStock.data?.length ?? 0}
+          outstandingSheetsCount={outstandingSheets.data?.length ?? 0}
+          onNavigate={navigation.navigate}
+        />
+
+        {(myDuties.data?.length ?? 0) > 0 || (todaysEvents.data?.length ?? 0) > 0 ? (
+          <Card>
+            <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>TODAY</Text>
+            {myDuties.data?.map((d) => (
+              <Text key={d.id} style={{ ...typography.body, color: semantic.textPrimary, paddingVertical: spacing.xs }}>
+                {d.title}
+                {d.scheduleNote ? ` · ${d.scheduleNote}` : ''}
+              </Text>
+            ))}
+            {todaysEvents.data?.map((e) => (
+              <View
+                key={e.id}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.xs }}
+              >
+                <Icon name="calendar-outline" size={16} color={semantic.textPrimary} />
+                <Text style={{ ...typography.body, color: semantic.textPrimary }}>{e.title}</Text>
               </View>
-            </Card>
-          ) : null}
+            ))}
+          </Card>
+        ) : null}
 
-          <NeedsAttention
-            pendingLeaveCount={pendingLeave.data?.length ?? 0}
-            atRiskCount={atRisk.data?.length ?? 0}
-            needsCoverCount={needsCover.data?.length ?? 0}
-            lowStockCount={lowStock.data?.length ?? 0}
-            outstandingSheetsCount={outstandingSheets.data?.length ?? 0}
-            onNavigate={navigation.navigate}
-          />
-
-          {(myDuties.data?.length ?? 0) > 0 || (todaysEvents.data?.length ?? 0) > 0 ? (
-            <Card>
-              <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>TODAY</Text>
-              {myDuties.data?.map((d) => (
-                <Text key={d.id} style={{ ...typography.body, color: semantic.textPrimary, paddingVertical: spacing.xs }}>
-                  {d.title}
-                  {d.scheduleNote ? ` · ${d.scheduleNote}` : ''}
-                </Text>
-              ))}
-              {todaysEvents.data?.map((e) => (
-                <View
-                  key={e.id}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.xs }}
-                >
-                  <Icon name="calendar-outline" size={16} color={semantic.textPrimary} />
-                  <Text style={{ ...typography.body, color: semantic.textPrimary }}>{e.title}</Text>
-                </View>
-              ))}
-            </Card>
-          ) : null}
-
-          <QuickActions />
-        </View>
-      </Screen>
-    </DrawerLayout>
+        <QuickActions />
+      </View>
+    </Screen>
   );
 }
 

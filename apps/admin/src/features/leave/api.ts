@@ -582,3 +582,79 @@ export async function assignCover(input: { classId: string; staffId: string; sta
   });
   if (error) throw error;
 }
+
+export type CoverAssignmentRow = {
+  id: string;
+  classId: string;
+  className: string;
+  staffId: string;
+  staffName: string;
+  startsOn: string;
+  endsOn: string;
+  reason: string | null;
+  assignedByName: string;
+  createdAt: string;
+};
+
+type CoverAssignmentRpcRow = {
+  id: string;
+  class_id: string;
+  staff_id: string;
+  starts_on: string;
+  ends_on: string;
+  reason: string | null;
+  created_at: string;
+  classes: { name: string } | null;
+  staff: { full_name: string } | null;
+  assigner: { full_name: string } | null;
+};
+
+/**
+ * Every cover assignment whose starts_on falls in one academic year —
+ * powers AssignCoverScreen's "Assigned" tab, a year-by-year history rather
+ * than just what's currently active, so a completed assignment stays
+ * visible (just no longer removable — see AssignCoverScreen's own
+ * ends_on-vs-today check). Read under cover_assignments' own
+ * read_cover_assignments RLS (staff_id = self, or cover.assign/attendance
+ * permission on the class). Unscoped (both bounds omitted) returns every
+ * assignment ever made.
+ */
+export async function fetchCoverAssignmentsByYear(yearStartsOn?: string, yearEndsOn?: string): Promise<CoverAssignmentRow[]> {
+  let query = supabase
+    .from('cover_assignments')
+    .select(
+      'id, class_id, staff_id, starts_on, ends_on, reason, created_at, classes(name), staff!cover_assignments_staff_id_fkey(full_name), assigner:staff!cover_assignments_assigned_by_fkey(full_name)',
+    );
+  if (yearStartsOn) query = query.gte('starts_on', yearStartsOn);
+  if (yearEndsOn) query = query.lte('starts_on', yearEndsOn);
+  // Newest/most-future first, oldest (most likely already completed) last —
+  // the upcoming and ongoing assignments someone actually needs to act on
+  // surface before the ones that are just historical record.
+  const { data, error } = await query.order('starts_on', { ascending: false }).returns<CoverAssignmentRpcRow[]>();
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    classId: r.class_id,
+    className: r.classes?.name ?? '',
+    staffId: r.staff_id,
+    staffName: r.staff?.full_name ?? '',
+    startsOn: r.starts_on,
+    endsOn: r.ends_on,
+    reason: r.reason,
+    assignedByName: r.assigner?.full_name ?? '',
+    createdAt: r.created_at,
+  }));
+}
+
+/**
+ * Undoes a cover assignment — remove_cover_assignment() (backend/supabase/
+ * migrations/20260912150000_remove_cover_assignment.sql) mirrors
+ * assign_cover(): same cover.assign-on-this-class permission check, an
+ * audit_log row, and a notification telling the teacher their cover was
+ * cancelled. A plain client DELETE would satisfy cover_assignments' RLS too,
+ * but would silently skip the audit trail and the notification.
+ */
+export async function removeCoverAssignment(id: string): Promise<void> {
+  const { error } = await supabase.rpc('remove_cover_assignment', { p_cover_assignment_id: id });
+  if (error) throw error;
+}

@@ -17,9 +17,11 @@ import {
 } from 'date-fns';
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { parseDMY } from '@/lib/date';
 import { colors, elevation, radius, semantic, spacing, typography } from '@/theme/tokens';
 import { Button } from './Button';
 import { Icon } from './Icon';
+import { TextField } from './TextField';
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTH_LABELS = Array.from({ length: 12 }, (_, i) => format(setMonth(new Date(), i), 'MMM'));
@@ -277,7 +279,50 @@ export function CalendarModal({ visible, onClose, value, onChange, maxDate, minD
   );
 }
 
+type DateFieldProps = {
+  label: string;
+  /** DD/MM/YYYY, as typed so far. */
+  value: string;
+  onChangeText: (text: string) => void;
+  /** YYYY-MM-DD, from picking a day in the calendar. */
+  onPickIso: (iso: string) => void;
+  minDate?: string;
+  dayTone?: (isoDate: string) => 'school' | 'off' | undefined;
+  blockOffDays?: boolean;
+  error?: string;
+};
+
+/** A typed DD/MM/YYYY field (auto-slashed as digits are entered — see formatDMYInput) paired with a calendar-icon button that opens CalendarModal for visual picking, with school days vs non-school days marked when dayTone is given. */
+export function DateField({ label, value, onChangeText, onPickIso, minDate, dayTone, blockOffDays, error }: DateFieldProps) {
+  const [open, setOpen] = useState(false);
+  const iso = parseDMY(value) ?? undefined;
+
+  return (
+    <View style={{ gap: spacing.xs }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs }}>
+        <View style={{ flex: 1 }}>
+          <TextField label={label} placeholder="DD/MM/YYYY" value={value} onChangeText={onChangeText} keyboardType="number-pad" maxLength={10} error={error} />
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Pick ${label.toLowerCase()}`} onPress={() => setOpen(true)} style={styles.calendarTrigger}>
+          <Icon name="calendar-outline" size={18} color={semantic.primary} />
+        </Pressable>
+      </View>
+      <CalendarModal visible={open} value={iso} onChange={onPickIso} onClose={() => setOpen(false)} minDate={minDate} dayTone={dayTone} blockOffDays={blockOffDays} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  calendarTrigger: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: semantic.border,
+    backgroundColor: semantic.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   trigger: {
     flexDirection: 'row',
     alignItems: 'center',

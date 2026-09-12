@@ -14,4 +14,4 @@ export { EmptyState } from './EmptyState';
 export { SyncStatusBadge } from './SyncStatusBadge';
 export { Icon } from './Icon';
 export type { IconName } from './Icon';
-export { DatePicker, CalendarModal } from './DatePicker';
+export { DatePicker, CalendarModal, DateField } from './DatePicker';

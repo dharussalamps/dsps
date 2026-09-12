@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { addDays, differenceInCalendarDays, eachDayOfInterval, endOfMonth, format, getISODay, isValid, parseISO, startOfMonth } from 'date-fns';
 import { useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, CalendarModal, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SectionHeader, StatusPill, TextField } from '@/components';
+import { Button, Card, DateField, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SectionHeader, StatusPill, TextField } from '@/components';
 import { useCanRequestLeaveForOthers } from '@/features/accounts/hooks';
 import { useAcademicYears, useCalendarDaysInRange, useCurrentYearTerms, useWorkingWeekdays } from '@/features/calendar/hooks';
 import { listStaff, type StaffSummary } from '@/features/staff/api';
@@ -675,42 +675,6 @@ function LeaveTypeSelect({ leaveTypes, value, onChange }: { leaveTypes: LeaveTyp
   );
 }
 
-/** A typed DD/MM/YYYY field (auto-slashed as digits are entered — see formatDMYInput) paired with a calendar-icon button that opens the shared CalendarModal for visual picking. */
-function DateField({
-  label,
-  value,
-  onChangeText,
-  onPickIso,
-  minDate,
-  dayTone,
-  blockOffDays,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  onPickIso: (iso: string) => void;
-  minDate?: string;
-  dayTone?: (iso: string) => 'school' | 'off' | undefined;
-  blockOffDays?: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const iso = parseDMY(value) ?? undefined;
-
-  return (
-    <View style={{ gap: spacing.xs }}>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs }}>
-        <View style={{ flex: 1 }}>
-          <TextField label={label} placeholder="DD/MM/YYYY" value={value} onChangeText={onChangeText} keyboardType="number-pad" maxLength={10} />
-        </View>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Pick ${label.toLowerCase()}`} onPress={() => setOpen(true)} style={selectStyles.calendarTrigger}>
-          <Icon name="calendar-outline" size={18} color={semantic.primary} />
-        </Pressable>
-      </View>
-      <CalendarModal visible={open} value={iso} onChange={onPickIso} onClose={() => setOpen(false)} minDate={minDate} dayTone={dayTone} blockOffDays={blockOffDays} />
-    </View>
-  );
-}
-
 /** Shows where a staff member's maternity leave chain currently stands, and — if it hasn't reached its terminal phase — an action to request the next one. Dates are entirely system-computed; nothing here is typed by the user. */
 function MaternityChainCard({
   tip,
@@ -912,16 +876,6 @@ const selectStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.xs,
-  },
-  calendarTrigger: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: semantic.border,
-    backgroundColor: semantic.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   backdrop: { flex: 1, backgroundColor: 'rgba(24,10,13,0.55)', alignItems: 'center', justifyContent: 'center' },
   sheet: { width: 340, maxWidth: '90%', maxHeight: '70%', backgroundColor: semantic.surface, borderRadius: radius.xl, padding: spacing.lg, gap: spacing.sm, ...elevation.raised },
