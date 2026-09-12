@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   fetchLeaveAllocations,
   fetchLeaveRequestDetail,
+  fetchLeaveRequestsByStatus,
+  fetchLeaveTypeBalance,
   fetchMaternityChainTip,
   fetchMyLeaveBalances,
   fetchMyLeaveRequests,
@@ -35,8 +37,25 @@ export function usePendingLeaveRequests() {
   return useQuery({ queryKey: ['leave', 'pending'], queryFn: fetchPendingLeaveRequests });
 }
 
+/** Backs LeaveRequestsScreen's Pending/Approved tabs, scoped to one academic year's date range (or unscoped when yearRange is omitted). */
+export function useLeaveRequestsByStatus(status: 'pending' | 'approved', yearRange?: { startsOn: string; endsOn: string }) {
+  return useQuery({
+    queryKey: ['leave', 'by-status', status, yearRange?.startsOn, yearRange?.endsOn],
+    queryFn: () => fetchLeaveRequestsByStatus(status, yearRange?.startsOn, yearRange?.endsOn),
+  });
+}
+
 export function useLeaveRequestDetail(id: string) {
   return useQuery({ queryKey: ['leave', 'detail', id], queryFn: () => fetchLeaveRequestDetail(id) });
+}
+
+/** Live balance preview for the approval screen's leave-type reassignment picker — fetched fresh whenever the principal picks a different candidate type, so they see that type's actual remaining balance before assigning into it. */
+export function useLeaveTypeBalance(staffId: string | undefined, leaveTypeId: string | undefined) {
+  return useQuery({
+    queryKey: ['leave', 'type-balance', staffId, leaveTypeId],
+    queryFn: () => fetchLeaveTypeBalance(staffId as string, leaveTypeId as string),
+    enabled: !!staffId && !!leaveTypeId,
+  });
 }
 
 export function useLeaveAllocations(leaveTypeId: string | undefined, academicYearId: string | undefined) {

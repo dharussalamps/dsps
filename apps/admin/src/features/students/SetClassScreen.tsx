@@ -1,11 +1,11 @@
 import { useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SegmentedControl, StatusPill, TextField } from '@/components';
-import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
+import { ActivityIndicator, Alert, FlatList, LayoutAnimation, Platform, Pressable, StyleSheet, Text, TextInput, UIManager, View } from 'react-native';
+import { Avatar, Button, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SectionHeader, SegmentedControl, StatusPill } from '@/components';
+import { colors, elevation, minTapTarget, radius, semantic, spacing, typography } from '@/theme/tokens';
 import type { ClassSummary } from './api';
-import { removeStudentFromClass, setStudentClass } from './api';
+import { deleteStudent, removeStudentFromClass, setStudentClass } from './api';
 import { useClasses, useEnrolledStudentSearch, useUnassignedStudents } from './hooks';
 
 type Tab = 'unassigned' | 'enrolled';
@@ -21,19 +21,30 @@ function groupByGrade(classes: ClassSummary[]): GradeGroup[] {
   return [...groups.values()].sort((a, b) => a.gradeNumber - b.gradeNumber);
 }
 
-function StudentAvatar({ name }: { name: string }) {
-  return (
-    <View style={styles.avatar}>
-      <Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text>
-    </View>
-  );
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+/** Smooths every expand/collapse and tab switch on this screen — same technique as LeaveRequestsScreen. */
+function animateNext() {
+  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 }
 
-/** Reachable from More — the only place a student created without a class (AddStudentScreen's class picker is optional) can be given one afterward, and the only place a class can be cleared back to unassigned. */
+/**
+ * Reachable from More — the only place a student created without a class
+ * (AddStudentScreen's class picker is optional) can be given one afterward,
+ * the only place a class can be cleared back to unassigned, and (from the
+ * Unassigned tab) the only place a student can be permanently deleted —
+ * restricted to those with no class assignment and no attendance history.
+ */
 export function SetClassScreen() {
   const navigation = useNavigation();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>('unassigned');
+  // Lifted here (not just inside UnassignedTab) so the Hero can show the
+  // waiting count regardless of which tab is active — react-query shares
+  // the cache entry with the tab's own subscription below.
+  const unassigned = useUnassignedStudents();
+  const waitingCount = unassigned.data?.length ?? 0;
 
   async function onChanged() {
     await Promise.all([
@@ -49,30 +60,51 @@ export function SetClassScreen() {
         <ScreenHeader title="Set class" subtitle="Assign a class, or free one up" tone="onPrimary" back={navigation.canGoBack()} hideBell />
         <SegmentedControl
           value={tab}
-          onChange={setTab}
+          onChange={(next) => {
+            animateNext();
+            setTab(next);
+          }}
           options={[
             { key: 'unassigned', label: 'Unassigned', icon: 'person-add-outline' },
             { key: 'enrolled', label: 'In a class', icon: 'exit-outline' },
           ]}
         />
+        {tab === 'unassigned' && waitingCount > 0 ? (
+          <View
+            style={styles.summaryChip}
+            accessible
+            accessibilityLabel={`${waitingCount} ${waitingCount === 1 ? 'student' : 'students'} waiting for a class`}
+          >
+            <Icon name="alert-circle-outline" size={14} color={colors.warning} />
+            <Text style={styles.summaryChipText}>
+              {waitingCount} {waitingCount === 1 ? 'student' : 'students'} waiting for a class
+            </Text>
+          </View>
+        ) : null}
       </Hero>
-      {tab === 'unassigned' ? <UnassignedTab onChanged={onChanged} /> : <EnrolledTab onChanged={onChanged} />}
+      {tab === 'unassigned' ? <UnassignedTab unassigned={unassigned} onChanged={onChanged} /> : <EnrolledTab onChanged={onChanged} />}
     </Screen>
   );
 }
 
-function UnassignedTab({ onChanged }: { onChanged: () => Promise<void> }) {
-  const unassigned = useUnassignedStudents();
+function UnassignedTab({ unassigned, onChanged }: { unassigned: ReturnType<typeof useUnassignedStudents>; onChanged: () => Promise<void> }) {
   const classes = useClasses();
   const grouped = useMemo(() => groupByGrade(classes.data ?? []), [classes.data]);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [busy, setBusy] = useState<{ studentId: string; classId: string } | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  function toggleExpand(id: string) {
+    animateNext();
+    setExpandedId((current) => (current === id ? null : id));
+  }
 
   async function assign(studentId: string, classId: string) {
     setBusy({ studentId, classId });
     try {
       await setStudentClass(studentId, classId);
+      animateNext();
       setExpandedId(null);
       await onChanged();
     } catch (err) {
@@ -82,45 +114,77 @@ function UnassignedTab({ onChanged }: { onChanged: () => Promise<void> }) {
     }
   }
 
-  const count = unassigned.data?.length ?? 0;
+  function confirmDelete(studentId: string, name: string) {
+    Alert.alert(
+      'Delete this student?',
+      `${name}'s record will be permanently removed and cannot be recovered. This only works if they have no attendance history.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => void doDelete(studentId) },
+      ],
+    );
+  }
+
+  async function doDelete(studentId: string) {
+    setDeletingId(studentId);
+    try {
+      await deleteStudent(studentId);
+      if (expandedId === studentId) {
+        animateNext();
+        setExpandedId(null);
+      }
+      await onChanged();
+    } catch (err) {
+      Alert.alert('Could not delete this student', err instanceof Error ? err.message : 'You may not have permission to do this.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <FlatList
       data={unassigned.data ?? []}
       keyExtractor={(s) => s.id}
       contentContainerStyle={styles.listContent}
-      ListHeaderComponent={
-        count > 0 ? (
-          <View style={styles.statCard}>
-            <View style={styles.statIconWrap}>
-              <Icon name="alert-circle" size={20} color={colors.warning} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.statNumber}>{count}</Text>
-              <Text style={styles.statLabel}>{count === 1 ? 'student waiting for a class' : 'students waiting for a class'}</Text>
-            </View>
-          </View>
-        ) : null
-      }
       ListEmptyComponent={
         unassigned.isLoading ? (
           <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
         ) : (
-          <EmptyState title="Everyone has a class" message="No unassigned students right now." />
+          <EmptyState icon="checkmark-done-outline" title="Everyone has a class" message="No unassigned students right now." />
         )
       }
       renderItem={({ item }) => {
         const displayName = item.preferredName || item.fullName;
         const expanded = expandedId === item.id;
         return (
-          <Card onPress={() => setExpandedId(expanded ? null : item.id)} flat style={expanded ? styles.cardExpanded : undefined}>
+          <Card onPress={() => toggleExpand(item.id)} flat style={StyleSheet.flatten([styles.compactCard, expanded ? styles.cardExpanded : null])}>
             <View style={styles.row}>
-              <StudentAvatar name={displayName} />
+              <Avatar name={displayName} size={36} />
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={styles.name}>{displayName}</Text>
                 <Text style={styles.meta}>{item.admissionNo}</Text>
               </View>
-              <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.ink300} />
+              <View style={styles.actions}>
+                {!item.hasAttendance ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${displayName}`}
+                    hitSlop={6}
+                    disabled={deletingId === item.id}
+                    onPress={() => confirmDelete(item.id, displayName)}
+                    style={[styles.iconAction, styles.deleteAction]}
+                  >
+                    {deletingId === item.id ? (
+                      <ActivityIndicator size="small" color={colors.error} />
+                    ) : (
+                      <Icon name="trash-outline" size={16} color={colors.error} />
+                    )}
+                  </Pressable>
+                ) : null}
+                <View style={styles.iconAction}>
+                  <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={semantic.textSecondary} />
+                </View>
+              </View>
             </View>
 
             {expanded ? (
@@ -130,7 +194,7 @@ function UnassignedTab({ onChanged }: { onChanged: () => Promise<void> }) {
                 ) : (
                   grouped.map((g) => (
                     <View key={g.gradeNumber} style={{ gap: spacing.xs }}>
-                      <Text style={styles.gradeLabel}>{g.gradeName.toUpperCase()}</Text>
+                      <SectionHeader icon="school-outline" label={g.gradeName.toUpperCase()} />
                       <View style={styles.chipRow}>
                         {g.classes.map((c) => (
                           <Button
@@ -183,14 +247,21 @@ function EnrolledTab({ onChanged }: { onChanged: () => Promise<void> }) {
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={styles.searchWrap}>
-        <TextField
+      <View style={styles.searchCard}>
+        <Icon name="search-outline" size={18} color={semantic.textSecondary} />
+        <TextInput
+          style={styles.searchInput}
           placeholder="Search by name or admission no."
+          placeholderTextColor={colors.ink300}
           value={query}
           onChangeText={setQuery}
-          onClear={() => setQuery('')}
           autoCapitalize="none"
         />
+        {query.length > 0 ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={8} onPress={() => setQuery('')}>
+            <Icon name="close-circle" size={18} color={colors.ink300} />
+          </Pressable>
+        ) : null}
       </View>
       <FlatList
         data={search.data ?? []}
@@ -199,9 +270,9 @@ function EnrolledTab({ onChanged }: { onChanged: () => Promise<void> }) {
         renderItem={({ item }) => {
           const displayName = item.preferredName || item.fullName;
           return (
-            <Card flat>
+            <Card flat style={styles.compactCard}>
               <View style={styles.row}>
-                <StudentAvatar name={displayName} />
+                <Avatar name={displayName} size={36} />
                 <View style={{ flex: 1, gap: 4 }}>
                   <Text style={styles.name}>{displayName}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
@@ -209,16 +280,16 @@ function EnrolledTab({ onChanged }: { onChanged: () => Promise<void> }) {
                     <StatusPill label={item.className} tone="gold" />
                   </View>
                 </View>
-                <Button
-                  label=""
+                <Pressable
+                  accessibilityRole="button"
                   accessibilityLabel={`Remove ${displayName} from ${item.className}`}
-                  icon="exit-outline"
-                  size="sm"
-                  variant="ghost"
-                  textColor={colors.error}
-                  loading={busyId === item.id}
+                  hitSlop={6}
+                  disabled={busyId === item.id}
                   onPress={() => confirmRemove(item.id, displayName, item.className)}
-                />
+                  style={[styles.iconAction, styles.deleteAction]}
+                >
+                  {busyId === item.id ? <ActivityIndicator size="small" color={colors.error} /> : <Icon name="exit-outline" size={16} color={colors.error} />}
+                </Pressable>
               </View>
             </Card>
           );
@@ -227,9 +298,9 @@ function EnrolledTab({ onChanged }: { onChanged: () => Promise<void> }) {
           search.isLoading ? (
             <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
           ) : hasQuery ? (
-            <EmptyState title="No matches" message="Try a different name or admission number." />
+            <EmptyState icon="search-outline" title="No matches" message="Try a different name or admission number." />
           ) : (
-            <EmptyState title="Find a student" message="Search by name or admission number to remove them from their class." />
+            <EmptyState icon="people-outline" title="Find a student" message="Search by name or admission number to remove them from their class." />
           )
         }
       />
@@ -238,41 +309,46 @@ function EnrolledTab({ onChanged }: { onChanged: () => Promise<void> }) {
 }
 
 const styles = StyleSheet.create({
-  listContent: { padding: spacing.lg, gap: spacing.sm, flexGrow: 1 },
-  searchWrap: { padding: spacing.lg, paddingBottom: 0 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.pill,
-    backgroundColor: colors.maroon100,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { ...typography.subtitle, color: colors.maroon700 },
-  name: { ...typography.bodyStrong, color: semantic.textPrimary },
-  meta: { ...typography.caption, color: semantic.textSecondary },
-  cardExpanded: { borderColor: semantic.primary, borderWidth: 1.5 },
-  chipArea: { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: semantic.border, gap: spacing.sm },
-  gradeLabel: { ...typography.overline, color: semantic.textSecondary },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
-  statCard: {
+  listContent: { padding: spacing.lg, gap: spacing.xs, flexGrow: 1 },
+  searchCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.warningBg,
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: -spacing.lg,
+    minHeight: minTapTarget,
+    backgroundColor: semantic.surface,
     borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.md,
+    ...elevation.raised,
   },
-  statIconWrap: {
-    width: 40,
-    height: 40,
+  searchInput: { flex: 1, ...typography.body, color: semantic.textPrimary, paddingVertical: spacing.sm },
+  compactCard: { paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  name: { ...typography.bodyStrong, color: semantic.textPrimary },
+  meta: { ...typography.caption, color: semantic.textSecondary },
+  cardExpanded: { borderColor: semantic.primary, borderWidth: 1.5, ...elevation.card },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  iconAction: {
+    width: 32,
+    height: 32,
     borderRadius: radius.pill,
-    backgroundColor: colors.white,
+    backgroundColor: semantic.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statNumber: { ...typography.title, color: colors.warning },
-  statLabel: { ...typography.caption, color: semantic.textSecondary },
+  deleteAction: { backgroundColor: colors.errorBg },
+  chipArea: { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: semantic.border, gap: spacing.sm },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  summaryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: colors.warningBg,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  summaryChipText: { ...typography.captionStrong, color: colors.warning },
 });

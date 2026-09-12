@@ -14,7 +14,7 @@ type MenuItem = { label: string; route: keyof RootStackParamList; icon: IconName
 // AdminSpec.md section 10: "More | permission-filtered menu with badges".
 // Every entry is shown for now — filtering by the signed-in staff member's
 // actual grants lands once build task 21 (accounts/permissions) exists;
-// see docs/AdminSpec.md section 17. The data-entry screens (My leave, Assign
+// see docs/AdminSpec.md section 17. The data-entry screens (Request leave, Assign
 // cover teacher, Inventory, Events, School diary) moved to the Home screen's
 // left drawer — see DataEntryDrawer.tsx.
 const menu: MenuItem[] = [

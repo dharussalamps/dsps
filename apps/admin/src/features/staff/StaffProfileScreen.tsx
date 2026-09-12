@@ -1,11 +1,14 @@
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { differenceInMonths, differenceInYears, format, parseISO } from 'date-fns';
 import { useState } from 'react';
 import { Alert, ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Avatar, Button, Card, EmptyState, Hero, HeroDoodle, Icon, type IconName, Screen, SectionHeader, SegmentedControl, StatusPill, TextField } from '@/components';
 import { useCanManageStaff } from '@/features/accounts/hooks';
-import { fetchMyLeaveRequests } from '@/features/leave/api';
+import { fetchMyLeaveRequests, type LeaveRequestRow } from '@/features/leave/api';
+import { useMyLeaveBalances } from '@/features/leave/hooks';
+import { leaveTypeIcon, LeaveBalanceCard, LeaveTrendCard, statusAccentColor, statusTone } from '@/features/leave/LeaveDisplay';
 import { useCurrentYearTerms } from '@/features/calendar/hooks';
 import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import type { RootStackParamList } from '@/navigation/types';
@@ -15,14 +18,8 @@ import { ResponsibilitiesSection } from './ResponsibilitiesSection';
 import { useStaffAttendanceSummary, useStaffProfile } from './hooks';
 
 type Route = RouteProp<RootStackParamList, 'StaffProfile'>;
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Tab = 'overview' | 'attendance' | 'leave';
-
-const leaveStatusTone: Record<string, 'success' | 'warning' | 'error' | 'neutral'> = {
-  approved: 'success',
-  pending: 'warning',
-  rejected: 'error',
-  withdrawn: 'neutral',
-};
 
 const TABS: { key: Tab; label: string; icon: IconName }[] = [
   { key: 'overview', label: 'Overview', icon: 'person-outline' },
@@ -54,7 +51,7 @@ function rateColor(rate: number): string {
  * else in the app.
  */
 export function StaffProfileScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<Nav>();
   const { params } = useRoute<Route>();
   const queryClient = useQueryClient();
   const canManageStaff = useCanManageStaff();
@@ -67,6 +64,9 @@ export function StaffProfileScreen() {
     queryKey: ['leave', 'staff-history', params.staffId],
     queryFn: () => fetchMyLeaveRequests(params.staffId),
   });
+  const leaveBalances = useMyLeaveBalances(params.staffId);
+  const pendingLeaveRequests = (leave.data ?? []).filter((r) => r.status === 'pending');
+  const takenLeaveRequests = (leave.data ?? []).filter((r) => r.status === 'approved');
   const [responsibilitiesDirty, setResponsibilitiesDirty] = useState(false);
 
   const [editingContact, setEditingContact] = useState(false);
@@ -303,24 +303,49 @@ export function StaffProfileScreen() {
         ) : null}
 
         {tab === 'leave' ? (
-          leave.data && leave.data.length > 0 ? (
-            <Card>
-              <SectionHeader icon="airplane-outline" label="LEAVE TAKEN" />
-              {leave.data.slice(0, 10).map((l, i) => (
-                <View key={l.id} style={[styles.leaveRow, i > 0 && styles.leaveRowDivider]}>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={{ ...typography.body, color: semantic.textPrimary }}>{l.leaveTypeName}</Text>
-                    <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
-                      {l.startsOn} → {l.endsOn} · {l.dayCount} {l.dayCount === 1 ? 'day' : 'days'}
-                    </Text>
+          <>
+            <View style={{ gap: spacing.sm }}>
+              <SectionHeader icon="trending-up-outline" label="LEAVE ANALYSIS" />
+              <LeaveTrendCard requests={leave.data ?? []} />
+            </View>
+
+            <View style={{ gap: spacing.sm }}>
+              <SectionHeader icon="wallet-outline" label="LEAVE BALANCE" />
+              {leaveBalances.data && leaveBalances.data.length > 0 ? (
+                leaveBalances.data.map((b) => <LeaveBalanceCard key={b.leaveTypeId} balance={b} />)
+              ) : (
+                <EmptyState title="No balances allocated" message="Balances set in Leave Allocation will appear here." />
+              )}
+            </View>
+
+            <View style={{ gap: spacing.sm }}>
+              <SectionHeader icon="hourglass-outline" label="PENDING REQUESTS" />
+              {pendingLeaveRequests.length > 0 ? (
+                pendingLeaveRequests.map((r) => (
+                  <PendingLeaveRow key={r.id} request={r} onPress={() => navigation.navigate('LeaveRequestDetail', { requestId: r.id })} />
+                ))
+              ) : (
+                <EmptyState title="No pending requests" />
+              )}
+            </View>
+
+            {takenLeaveRequests.length > 0 ? (
+              <Card>
+                <SectionHeader icon="airplane-outline" label="LEAVE TAKEN" />
+                {takenLeaveRequests.slice(0, 10).map((l, i) => (
+                  <View key={l.id} style={[styles.leaveRow, i > 0 && styles.leaveRowDivider]}>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={{ ...typography.body, color: semantic.textPrimary }}>{l.leaveTypeName}</Text>
+                      <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
+                        {l.startsOn} → {l.endsOn} · {l.dayCount} {l.dayCount === 1 ? 'day' : 'days'}
+                      </Text>
+                    </View>
+                    <StatusPill label={l.status} tone={statusTone[l.status]} />
                   </View>
-                  <StatusPill label={l.status} tone={leaveStatusTone[l.status]} />
-                </View>
-              ))}
-            </Card>
-          ) : (
-            <EmptyState title="No leave taken" message="Approved leave will appear here." />
-          )
+                ))}
+              </Card>
+            ) : null}
+          </>
         ) : null}
       </View>
     </Screen>
@@ -353,6 +378,35 @@ function Metric({ label, value, pct, icon, color }: { label: string; value: numb
       <Text style={styles.metricLabel}>{label}</Text>
       <Text style={styles.metricPct}>{pct}%</Text>
     </View>
+  );
+}
+
+/** A pending request is tappable straight through to LeaveRequestDetail — whoever can act on it (principal/administrator) gets Approve/Reject there; RLS is the real gate, so tapping through is safe for anyone, same pattern as LeaveRequestsScreen. */
+function PendingLeaveRow({ request, onPress }: { request: LeaveRequestRow; onPress: () => void }) {
+  return (
+    <Card onPress={onPress} flat style={styles.pendingCard}>
+      <View style={[styles.pendingAccent, { backgroundColor: statusAccentColor.pending }]} />
+      <View style={styles.historyIconWrap}>
+        <Icon name={leaveTypeIcon(request.leaveTypeKey)} size={14} color={semantic.primary} />
+      </View>
+      <View style={{ flex: 1, gap: 1 }}>
+        <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }} numberOfLines={1}>
+          {request.leaveTypeName} · {request.dayCount}d
+        </Text>
+        <Text style={{ ...typography.caption, color: semantic.textSecondary }} numberOfLines={1}>
+          {request.startsOn} → {request.endsOn}
+        </Text>
+        <Text style={{ ...typography.caption, color: semantic.textSecondary }} numberOfLines={1}>
+          {request.reason}
+        </Text>
+        {request.requestedBy !== request.staffId ? (
+          <Text style={{ ...typography.caption, color: semantic.textSecondary, fontStyle: 'italic' }} numberOfLines={1}>
+            Requested by {request.requestedByName}
+          </Text>
+        ) : null}
+      </View>
+      <Icon name="chevron-forward" size={16} color={semantic.textSecondary} />
+    </Card>
   );
 }
 
@@ -441,4 +495,14 @@ const styles = StyleSheet.create({
   chartLabel: { ...typography.caption, color: semantic.textSecondary },
   leaveRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm, paddingVertical: spacing.sm },
   leaveRowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: semantic.border },
+  pendingCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, overflow: 'hidden', padding: spacing.sm },
+  pendingAccent: { width: 3, alignSelf: 'stretch', borderRadius: radius.pill },
+  historyIconWrap: {
+    width: 26,
+    height: 26,
+    borderRadius: radius.pill,
+    backgroundColor: semantic.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

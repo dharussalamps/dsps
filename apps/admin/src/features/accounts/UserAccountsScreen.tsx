@@ -2,14 +2,14 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Button, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, TextField } from '@/components';
 import { useClasses } from '@/features/students/hooks';
 import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import type { RootStackParamList } from '@/navigation/types';
-import { colors, semantic, spacing } from '@/theme/tokens';
+import { colors, elevation, minTapTarget, radius, semantic, spacing, typography } from '@/theme/tokens';
 import { parseDMY } from '@/lib/date';
 import { assignRole, createStaffAccount, createStaffLogin, revokeRole, setStaffStatus, updateStaffAccount, type AccountRow } from './api';
 import { AccountCard, confirmRevoke } from './AccountCard';
@@ -185,8 +185,24 @@ export function UserAccountsScreen() {
             </Pressable>
           </View>
         </ScreenHeader>
-        <TextField placeholder="Search by name or staff number" value={query} onChangeText={setQuery} autoCapitalize="none" style={styles.searchInput} />
       </Hero>
+
+      <View style={styles.searchCard}>
+        <Icon name="search-outline" size={18} color={semantic.textSecondary} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by name or staff number"
+          placeholderTextColor={colors.ink300}
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+        />
+        {query.length > 0 ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={8} onPress={() => setQuery('')}>
+            <Icon name="close-circle" size={18} color={colors.ink300} />
+          </Pressable>
+        ) : null}
+      </View>
 
       {creating || showImport ? (
         <View style={{ padding: spacing.lg, paddingBottom: 0, gap: spacing.md }}>
@@ -270,5 +286,17 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   headerButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   headerButtonActive: { backgroundColor: 'rgba(255,255,255,0.22)' },
-  searchInput: { backgroundColor: colors.white, borderWidth: 0 },
+  searchCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: -spacing.lg,
+    minHeight: minTapTarget,
+    backgroundColor: semantic.surface,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    ...elevation.raised,
+  },
+  searchInput: { flex: 1, ...typography.body, color: semantic.textPrimary, paddingVertical: spacing.sm },
 });

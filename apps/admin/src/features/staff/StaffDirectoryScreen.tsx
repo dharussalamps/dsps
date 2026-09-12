@@ -1,10 +1,10 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Avatar, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SegmentedControl, StatusPill, TextField } from '@/components';
+import { ActivityIndicator, FlatList, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Avatar, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SegmentedControl, StatusPill } from '@/components';
 import type { RootStackParamList } from '@/navigation/types';
-import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
+import { colors, elevation, minTapTarget, radius, semantic, spacing, typography } from '@/theme/tokens';
 import { todayIso } from '@/features/attendance/hooks';
 import { useDutyRoster, useStaffDirectory, useTodayPresence } from './hooks';
 
@@ -36,20 +36,28 @@ export function StaffDirectoryScreen() {
         <ScreenHeader title="Staff directory" tone="onPrimary" back={navigation.canGoBack()} />
 
         <SegmentedControl value={tab} onChange={setTab} options={TABS} />
-
-        {tab === 'people' ? (
-          <TextField
-            placeholder="Search by name or staff number"
-            value={query}
-            onChangeText={setQuery}
-            onClear={() => setQuery('')}
-            autoCapitalize="none"
-            style={styles.searchInput}
-          />
-        ) : null}
       </Hero>
 
-      <View style={{ flex: 1, padding: spacing.lg }}>
+      {tab === 'people' ? (
+        <View style={styles.searchCard}>
+          <Icon name="search-outline" size={18} color={semantic.textSecondary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by name or staff number"
+            placeholderTextColor={colors.ink300}
+            value={query}
+            onChangeText={setQuery}
+            autoCapitalize="none"
+          />
+          {query.length > 0 ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={8} onPress={() => setQuery('')}>
+              <Icon name="close-circle" size={18} color={colors.ink300} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
+      <View style={{ flex: 1, padding: spacing.lg, paddingTop: tab === 'people' ? spacing.sm : spacing.lg }}>
         {tab === 'people' ? (
           staff.isLoading ? (
             <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
@@ -132,7 +140,19 @@ export function StaffDirectoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  searchInput: { backgroundColor: colors.white, borderWidth: 0 },
+  searchCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: -spacing.lg,
+    minHeight: minTapTarget,
+    backgroundColor: semantic.surface,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    ...elevation.raised,
+  },
+  searchInput: { flex: 1, ...typography.body, color: semantic.textPrimary, paddingVertical: spacing.sm },
   staffCard: { padding: 0, overflow: 'hidden' },
   accentBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
   staffRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm, paddingLeft: spacing.sm + 4 },

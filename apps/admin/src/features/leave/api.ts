@@ -33,6 +33,17 @@ export const MATERNITY_PHASE_AFTER: Partial<Record<MaternityPhase, MaternityPhas
 
 export type LeaveType = { id: string; key: string; name: string; requiresDocument: boolean; annualEntitlement: number };
 
+/**
+ * The only leave types an approver may reclassify a pending request into or
+ * out of at approval time (e.g. staff filed Medical, principal decides it's
+ * really Casual) — see approve_leave() in
+ * 20260912120000_approve_leave_reclassify_type.sql, which enforces the same
+ * restriction server-side. Short Leave (fixed monthly cap, no leave_balances
+ * row), Maternity (phase chain) and Half Day (not a real standalone type)
+ * are excluded because a blind type swap would break logic specific to them.
+ */
+export const RECLASSIFIABLE_LEAVE_KEYS: string[] = ['casual', 'medical', 'duty'];
+
 export async function listLeaveTypes(): Promise<LeaveType[]> {
   const { data, error } = await supabase
     .from('leave_types')
@@ -164,6 +175,9 @@ export type LeaveRequestRow = {
   id: string;
   staffId: string;
   staffName: string;
+  /** Who actually filed this request — equals staffId unless a principal/administrator requested it on this staff member's behalf (see 20260912100000_leave_request_for_others.sql). */
+  requestedBy: string;
+  requestedByName: string;
   leaveTypeKey: string;
   leaveTypeName: string;
   startsOn: string;
@@ -176,7 +190,7 @@ export type LeaveRequestRow = {
 };
 
 const LEAVE_REQUEST_ROW_SELECT =
-  'id, staff_id, starts_on, ends_on, day_count, reason, status, created_at, maternity_phase, leave_types(key, name), staff!leave_requests_staff_id_fkey(full_name)';
+  'id, staff_id, requested_by, starts_on, ends_on, day_count, reason, status, created_at, maternity_phase, leave_types(key, name), staff!leave_requests_staff_id_fkey(full_name), requester:staff!leave_requests_requested_by_fkey(full_name)';
 
 export async function fetchMyLeaveRequests(staffId: string): Promise<LeaveRequestRow[]> {
   const { data, error } = await supabase
@@ -200,9 +214,32 @@ export async function fetchPendingLeaveRequests(): Promise<LeaveRequestRow[]> {
   return (data ?? []).map(toRow);
 }
 
+/**
+ * Powers LeaveRequestsScreen's principal-facing Pending/Approved tabs.
+ * leave_requests carries no academic_year_id of its own (unlike
+ * leave_balances) — "year-wise" here means starts_on falling inside the
+ * picked academic year's date range, passed in by the caller.
+ */
+export async function fetchLeaveRequestsByStatus(
+  status: 'pending' | 'approved',
+  yearStartsOn?: string,
+  yearEndsOn?: string,
+): Promise<LeaveRequestRow[]> {
+  let query = supabase.from('leave_requests').select(LEAVE_REQUEST_ROW_SELECT).eq('status', status);
+  if (yearStartsOn) query = query.gte('starts_on', yearStartsOn);
+  if (yearEndsOn) query = query.lte('starts_on', yearEndsOn);
+  // Pending: oldest first, so the longest-waiting request surfaces first.
+  // Approved: most recent first, matching History's ordering elsewhere.
+  query = query.order('starts_on', { ascending: status === 'pending' });
+  const { data, error } = await query.returns<LeaveRequestRpcRow[]>();
+  if (error) throw error;
+  return (data ?? []).map(toRow);
+}
+
 type LeaveRequestRpcRow = {
   id: string;
   staff_id: string;
+  requested_by: string;
   starts_on: string;
   ends_on: string;
   day_count: number;
@@ -212,6 +249,7 @@ type LeaveRequestRpcRow = {
   maternity_phase: MaternityPhase | null;
   leave_types: { key: string; name: string } | null;
   staff: { full_name: string } | null;
+  requester: { full_name: string } | null;
 };
 
 function toRow(r: LeaveRequestRpcRow): LeaveRequestRow {
@@ -219,6 +257,8 @@ function toRow(r: LeaveRequestRpcRow): LeaveRequestRow {
     id: r.id,
     staffId: r.staff_id,
     staffName: r.staff?.full_name ?? '',
+    requestedBy: r.requested_by,
+    requestedByName: r.requester?.full_name ?? '',
     leaveTypeKey: r.leave_types?.key ?? '',
     leaveTypeName: r.leave_types?.name ?? '',
     startsOn: r.starts_on,
@@ -235,16 +275,41 @@ export type LeaveRequestDetail = LeaveRequestRow & {
   leaveTypeId: string;
   halfDay: boolean;
   requiresCover: boolean;
-  suggestedCover: { staffId: string; fullName: string }[];
   balance: { entitled: number; used: number } | null;
-  otherStaffOnLeave: number;
+  /** Other staff with an approved leave request overlapping these dates — named, not just counted, so the approver can see who specifically is already away (FR-LVE-04). */
+  overlappingStaff: { staffId: string; fullName: string }[];
 };
+
+/**
+ * Current academic year's leave_balances row for one staff member/leave
+ * type — entitled/used, or null if no row exists yet. Scoped to the
+ * current year explicitly: leave_balances is unique per (staff, type,
+ * year), so a staff member with balances recorded across multiple years
+ * would otherwise return more than one row to a bare .maybeSingle().
+ * Not valid for Short Leave (see SHORT_LEAVE_KEY) — it has no real
+ * leave_balances row of its own; see fetchLeaveRequestDetail's own
+ * short-leave branch for that type's monthly-cap logic instead.
+ */
+export async function fetchLeaveTypeBalance(staffId: string, leaveTypeId: string): Promise<{ entitled: number; used: number } | null> {
+  const { data: yearRow, error: yearError } = await supabase.from('academic_years').select('id').eq('is_current', true).maybeSingle();
+  if (yearError) throw yearError;
+  if (!yearRow) return null;
+  const { data: row, error } = await supabase
+    .from('leave_balances')
+    .select('entitled, used')
+    .eq('staff_id', staffId)
+    .eq('leave_type_id', leaveTypeId)
+    .eq('academic_year_id', yearRow.id)
+    .maybeSingle();
+  if (error) throw error;
+  return row ? { entitled: row.entitled, used: row.used } : null;
+}
 
 export async function fetchLeaveRequestDetail(id: string): Promise<LeaveRequestDetail | null> {
   const { data, error } = await supabase
     .from('leave_requests')
     .select(
-      'id, staff_id, leave_type_id, starts_on, ends_on, half_day, day_count, reason, status, created_at, maternity_phase, leave_types(key, name), staff!leave_requests_staff_id_fkey(full_name)',
+      'id, staff_id, requested_by, leave_type_id, starts_on, ends_on, half_day, day_count, reason, status, created_at, maternity_phase, leave_types(key, name), staff!leave_requests_staff_id_fkey(full_name), requester:staff!leave_requests_requested_by_fkey(full_name)',
     )
     .eq('id', id)
     .maybeSingle()
@@ -254,39 +319,64 @@ export async function fetchLeaveRequestDetail(id: string): Promise<LeaveRequestD
 
   const { data: myClass } = await supabase.from('classes').select('id').eq('class_teacher_id', data.staff_id).maybeSingle();
 
-  let suggestedCover: { staffId: string; fullName: string }[] = [];
-  if (myClass) {
-    const { data: candidates } = await supabase.from('staff').select('id, full_name').eq('status', 'active').neq('id', data.staff_id).limit(20);
-    suggestedCover = (candidates ?? []).map((c) => ({ staffId: c.id, fullName: c.full_name }));
-  }
-
   // FR-LVE-04: shown to the approver before they can approve — remaining
   // balance for this leave type, and how many other staff already have
   // approved leave overlapping the same dates.
-  const [{ data: balanceRow }, { data: otherCount, error: otherCountError }] = await Promise.all([
+  const isShortLeave = data.leave_types?.key === SHORT_LEAVE_KEY;
+  const [balanceResult, { data: overlapRows, error: overlapError }] = await Promise.all([
+    // Short Leave has no real leave_balances row of its own (see
+    // SHORT_LEAVE_KEY above) — approve_leave() still upserts one on every
+    // approval (annual_entitlement is 0 for this type, per
+    // 20260911130000_short_leave_type.sql), which would otherwise show a
+    // misleading "used / 0" here. Its real cap is the fixed monthly
+    // SHORT_LEAVE_MONTHLY_CAP, same as fetchMyLeaveBalances, counted from
+    // *approved* requests in the calendar month of this request only —
+    // pending requests (this one included) don't count until decided.
+    isShortLeave
+      ? (async () => {
+          const monthStart = format(startOfMonth(parseISO(data.starts_on)), 'yyyy-MM-dd');
+          const monthEnd = format(endOfMonth(parseISO(data.starts_on)), 'yyyy-MM-dd');
+          const { count, error: shortError } = await supabase
+            .from('leave_requests')
+            .select('id', { count: 'exact', head: true })
+            .eq('staff_id', data.staff_id)
+            .eq('leave_type_id', data.leave_type_id)
+            .eq('status', 'approved')
+            .gte('starts_on', monthStart)
+            .lte('starts_on', monthEnd);
+          if (shortError) throw shortError;
+          return { entitled: SHORT_LEAVE_MONTHLY_CAP, used: count ?? 0 };
+        })()
+      : fetchLeaveTypeBalance(data.staff_id, data.leave_type_id),
+    // Named, not just counted (count_staff_on_leave gave only a number) — the
+    // approver can see exactly who's already away for these dates.
     supabase
-      .from('leave_balances')
-      .select('entitled, used')
-      .eq('staff_id', data.staff_id)
-      .eq('leave_type_id', data.leave_type_id)
-      .maybeSingle(),
-    supabase.rpc('count_staff_on_leave', { p_starts: data.starts_on, p_ends: data.ends_on, p_exclude_staff: data.staff_id }),
+      .from('leave_requests')
+      .select('staff_id, staff!leave_requests_staff_id_fkey(full_name)')
+      .eq('status', 'approved')
+      .neq('staff_id', data.staff_id)
+      .lte('starts_on', data.ends_on)
+      .gte('ends_on', data.starts_on)
+      .returns<{ staff_id: string; staff: { full_name: string } | null }[]>(),
   ]);
-  if (otherCountError) throw otherCountError;
+  if (overlapError) throw overlapError;
+  const overlapByStaff = new Map<string, string>();
+  for (const r of overlapRows ?? []) if (!overlapByStaff.has(r.staff_id)) overlapByStaff.set(r.staff_id, r.staff?.full_name ?? '');
 
   return {
     ...toRow(data),
     leaveTypeId: data.leave_type_id,
     halfDay: data.half_day,
     requiresCover: !!myClass,
-    suggestedCover,
-    balance: balanceRow ? { entitled: balanceRow.entitled, used: balanceRow.used } : null,
-    otherStaffOnLeave: (otherCount as number) ?? 0,
+    balance: balanceResult,
+    overlappingStaff: Array.from(overlapByStaff, ([staffId, fullName]) => ({ staffId, fullName })),
   };
 }
 
 export async function requestLeave(input: {
   staffId: string;
+  /** Who is actually filing this — the signed-in user. Equal to staffId for a normal self-request; different when a principal/administrator is requesting on someone else's behalf (request_leave RLS requires this to be the caller's own id). */
+  requestedBy: string;
   leaveTypeId: string;
   startsOn: string;
   endsOn: string;
@@ -298,6 +388,7 @@ export async function requestLeave(input: {
 }): Promise<void> {
   const { error } = await supabase.from('leave_requests').insert({
     staff_id: input.staffId,
+    requested_by: input.requestedBy,
     leave_type_id: input.leaveTypeId,
     starts_on: input.startsOn,
     ends_on: input.endsOn,
@@ -349,7 +440,7 @@ export async function fetchMaternityChainTip(staffId: string): Promise<Maternity
 }
 
 /** Submits the next phase after `tip` — dates computed from tip.endsOn, no input from the staff member beyond confirming. Still a normal pending request the principal approves like any other. */
-export async function extendMaternityLeave(input: { staffId: string; tip: MaternityChainTip; reason: string }): Promise<void> {
+export async function extendMaternityLeave(input: { staffId: string; requestedBy: string; tip: MaternityChainTip; reason: string }): Promise<void> {
   const nextPhase = MATERNITY_PHASE_AFTER[input.tip.phase];
   if (!nextPhase) throw new Error('This maternity leave has no further phase to extend into.');
 
@@ -361,6 +452,7 @@ export async function extendMaternityLeave(input: { staffId: string; tip: Matern
 
   await requestLeave({
     staffId: input.staffId,
+    requestedBy: input.requestedBy,
     leaveTypeId: maternityType.id,
     startsOn,
     endsOn,
@@ -382,12 +474,15 @@ export async function approveLeave(
   coverStaffId: string | null,
   coverNotNeeded: boolean,
   remarks?: string,
+  /** Reclassify the request into a different leave type at approval time — see RECLASSIFIABLE_LEAVE_KEYS. Omit/undefined keeps the originally requested type. */
+  leaveTypeId?: string,
 ): Promise<void> {
   const { error } = await supabase.rpc('approve_leave', {
     p_request_id: id,
     p_cover_staff_id: coverStaffId,
     p_cover_not_needed: coverNotNeeded,
     p_remarks: remarks || null,
+    p_leave_type_id: leaveTypeId ?? null,
   });
   if (error) throw error;
 }

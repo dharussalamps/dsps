@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { DrawerLayout } from 'react-native-gesture-handler';
-import { Avatar, Button, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { Avatar, Button, Card, Hero, HeroDoodle, Icon, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
 import { fetchStudentsAtRisk } from '@/features/analytics/api';
 import { remindUnmarkedClassesBulk } from '@/features/attendance/api';
 import { todayIso, useMarkingStatus, useStaffAttendanceToday } from '@/features/attendance/hooks';
@@ -116,8 +116,11 @@ export function HomeScreen() {
           {loading ? (
             <ActivityIndicator color={colors.white} style={{ marginTop: spacing.xl }} />
           ) : !isSchoolDay.data ? (
-            <Card style={{ marginTop: spacing.lg }}>
-              <EmptyState title="Not a school day" message="Attendance marking opens on the next school day." />
+            <Card style={{ marginTop: spacing.lg, paddingVertical: spacing.md }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs }}>
+                <Icon name="moon-outline" size={16} color={semantic.textPrimary} />
+                <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>Not a school day</Text>
+              </View>
             </Card>
           ) : (
             <View style={{ gap: spacing.md, marginTop: spacing.lg }}>

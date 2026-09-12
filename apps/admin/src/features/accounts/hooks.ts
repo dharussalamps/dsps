@@ -43,6 +43,15 @@ export function useCanManageStaff(): boolean {
   return data?.some((key) => key === 'principal' || key === 'administrator') ?? false;
 }
 
+/** Mirrors current_staff_has_role(array['principal','administrator']), used by the
+ * request_leave RLS policy (20260912100000_leave_request_for_others.sql) to let a
+ * principal or administrator file a leave request on another staff member's behalf.
+ * UI-only gating — RLS is the real backstop, same pattern as useCanManageStaff above. */
+export function useCanRequestLeaveForOthers(): boolean {
+  const { data } = useMyRoleKeys();
+  return data?.some((key) => key === 'principal' || key === 'administrator') ?? false;
+}
+
 export type AuditFilters = { actorId?: string; entity?: string; fromDate?: string; toDate?: string };
 
 export function useAuditLog(filters: AuditFilters = {}) {

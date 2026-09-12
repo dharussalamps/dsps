@@ -3,6 +3,7 @@ import {
   fetchDutyRoster,
   fetchResponsibilitiesForStaff,
   fetchResponsibilityTitleSuggestions,
+  fetchRoleResponsibilitiesForStaff,
   fetchStaffAttendanceSummary,
   fetchTodayPresence,
   getStaffProfile,
@@ -37,6 +38,14 @@ export function useResponsibilitiesForStaff(staffId: string | undefined) {
   return useQuery({
     queryKey: ['staff', 'responsibilities', staffId],
     queryFn: () => fetchResponsibilitiesForStaff(staffId as string),
+    enabled: !!staffId,
+  });
+}
+
+export function useRoleResponsibilitiesForStaff(staffId: string | undefined) {
+  return useQuery({
+    queryKey: ['staff', 'role-responsibilities', staffId],
+    queryFn: () => fetchRoleResponsibilitiesForStaff(staffId as string),
     enabled: !!staffId,
   });
 }

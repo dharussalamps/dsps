@@ -2,11 +2,11 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native';
-import { Button, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, TextField } from '@/components';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Button, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader } from '@/components';
 import { useCanCreateStudents } from '@/features/accounts/hooks';
 import type { RootStackParamList } from '@/navigation/types';
-import { colors, minTapTarget, radius, semantic, spacing, typography } from '@/theme/tokens';
+import { colors, elevation, minTapTarget, radius, semantic, spacing, typography } from '@/theme/tokens';
 import type { ClassSummary } from './api';
 import { StudentListItem } from './StudentListItem';
 import { useClasses, useStudentSearch, useStudentsInClasses } from './hooks';
@@ -64,34 +64,35 @@ export function StudentSearchScreen() {
             </Pressable>
           ) : null}
         </ScreenHeader>
-        <View style={styles.searchRow}>
-          <View style={styles.scopePill}>
-            <Text style={styles.scopePillLabel} numberOfLines={1}>
-              {scope ? scope.name : 'All'}
-            </Text>
-            {scope ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Clear filter"
-                hitSlop={8}
-                onPress={() => setScope(null)}
-              >
-                <Icon name="close-circle" size={16} color={colors.ink300} />
-              </Pressable>
-            ) : null}
-          </View>
-          <View style={{ flex: 1 }}>
-            <TextField
-              placeholder="Search by name or index"
-              value={query}
-              onChangeText={setQuery}
-              onClear={() => setQuery('')}
-              autoCapitalize="none"
-              style={styles.searchInput}
-            />
-          </View>
-        </View>
       </Hero>
+
+      <View style={styles.searchCard}>
+        <View style={styles.scopePill}>
+          <Text style={styles.scopePillLabel} numberOfLines={1}>
+            {scope ? scope.name : 'All'}
+          </Text>
+          {scope ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="Clear filter" hitSlop={8} onPress={() => setScope(null)}>
+              <Icon name="close-circle" size={15} color={colors.ink300} />
+            </Pressable>
+          ) : null}
+        </View>
+        <View style={styles.searchDivider} />
+        <Icon name="search-outline" size={18} color={semantic.textSecondary} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by name or index"
+          placeholderTextColor={colors.ink300}
+          value={query}
+          onChangeText={setQuery}
+          autoCapitalize="none"
+        />
+        {query.length > 0 ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Clear search" hitSlop={8} onPress={() => setQuery('')}>
+            <Icon name="close-circle" size={18} color={colors.ink300} />
+          </Pressable>
+        ) : null}
+      </View>
 
       <View style={{ flex: 1 }}>
         {hasQuery ? (
@@ -185,20 +186,27 @@ export function StudentSearchScreen() {
 
 const styles = {
   headerButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  searchCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: -spacing.lg,
+    minHeight: minTapTarget,
+    backgroundColor: semantic.surface,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    ...elevation.raised,
+  },
   scopePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 4,
-    width: 118,
-    minHeight: minTapTarget,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radius.md,
-    backgroundColor: colors.white,
+    maxWidth: 96,
   },
-  scopePillLabel: { ...typography.bodyStrong, color: semantic.textPrimary, flexShrink: 1 },
-  searchInput: { flex: 1, backgroundColor: colors.white, borderWidth: 0 },
+  scopePillLabel: { ...typography.bodyStrong, color: semantic.primary, flexShrink: 1 },
+  searchDivider: { width: StyleSheet.hairlineWidth, height: '60%', backgroundColor: semantic.border },
+  searchInput: { flex: 1, ...typography.body, color: semantic.textPrimary, paddingVertical: spacing.sm },
   classRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   classButton: { paddingHorizontal: spacing.md },
 } as const;

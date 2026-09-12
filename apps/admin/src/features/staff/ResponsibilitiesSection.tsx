@@ -4,14 +4,21 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'rea
 import { Button, Card, Icon, TextField } from '@/components';
 import { useAuthStore } from '@/store/authStore';
 import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
-import { assignResponsibility, fetchCurrentAcademicYearId, removeResponsibility } from './api';
-import { useResponsibilitiesForStaff, useResponsibilityTitleSuggestions } from './hooks';
+import { assignResponsibility, fetchCurrentAcademicYearId, removeResponsibility, type RoleResponsibility } from './api';
+import { useResponsibilitiesForStaff, useResponsibilityTitleSuggestions, useRoleResponsibilitiesForStaff } from './hooks';
+
+/** Class Teacher/Sectional Head/etc. -> title "Class Teacher" with caption "4B"; "Sectional Head" with caption "Grade 4". Whole-school roles (Principal, Administrator, Vice Principal) need no scope caption. */
+function roleResponsibilityLabel(r: RoleResponsibility): { title: string; caption: string | null } {
+  if (r.scopeType === 'school' || r.scopeType === 'self') return { title: r.roleName, caption: null };
+  return { title: r.roleName, caption: r.scopeLabel };
+}
 
 /** section 10 StaffProfile action: "Assign responsibility". */
 export function ResponsibilitiesSection({ staffId, onDirtyChange }: { staffId: string; onDirtyChange?: (dirty: boolean) => void }) {
   const me = useAuthStore((s) => s.staff);
   const queryClient = useQueryClient();
   const responsibilities = useResponsibilitiesForStaff(staffId);
+  const roleResponsibilities = useRoleResponsibilitiesForStaff(staffId);
 
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
@@ -127,6 +134,21 @@ export function ResponsibilitiesSection({ staffId, onDirtyChange }: { staffId: s
         </View>
       ) : null}
 
+      {roleResponsibilities.data?.map((r) => {
+        const { title, caption } = roleResponsibilityLabel(r);
+        return (
+          <View key={r.id} style={styles.row}>
+            <View style={styles.roleRowIconChip}>
+              <Icon name="shield-checkmark-outline" size={15} color={colors.gold900} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ ...typography.body, color: semantic.textPrimary }}>{title}</Text>
+              {caption ? <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{caption}</Text> : null}
+            </View>
+          </View>
+        );
+      })}
+
       {responsibilities.data?.map((r) => (
         <View key={r.id} style={styles.row}>
           <View style={styles.rowIconChip}>
@@ -166,6 +188,14 @@ const styles = StyleSheet.create({
     height: 30,
     borderRadius: radius.pill,
     backgroundColor: semantic.primaryMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roleRowIconChip: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.pill,
+    backgroundColor: colors.gold100,
     alignItems: 'center',
     justifyContent: 'center',
   },

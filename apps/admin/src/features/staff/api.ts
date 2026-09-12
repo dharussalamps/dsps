@@ -73,6 +73,57 @@ export async function fetchResponsibilitiesForStaff(staffId: string): Promise<Re
   return (data ?? []).map((r) => ({ id: r.id, staffId: r.staff_id, staffName: r.staff?.full_name ?? '', title: r.title, position: r.position, scheduleNote: r.schedule_note }));
 }
 
+export type RoleResponsibility = { id: string; roleKey: string; roleName: string; scopeType: 'school' | 'grade' | 'class' | 'self'; scopeLabel: string | null };
+
+/**
+ * Role-derived responsibilities (class teacher of a class, sectional head of a grade,
+ * principal/administrator/vice principal of the whole school) — distinct from the ad-hoc
+ * `responsibilities` table above (e.g. "Library duty"). Sourced from staff_roles, whose
+ * read_staff_roles RLS policy only returns rows for the viewer's own staff_id or an
+ * account.manage holder, so an unauthorized viewer simply sees an empty list here, same as
+ * the rest of this profile (FR-STF-06). The baseline 'staff' role every account carries is
+ * filtered out since it isn't a responsibility.
+ */
+export async function fetchRoleResponsibilitiesForStaff(staffId: string): Promise<RoleResponsibility[]> {
+  const { data, error } = await supabase
+    .from('staff_roles')
+    .select('id, scope_type, scope_id, roles(key, name)')
+    .eq('staff_id', staffId)
+    .is('revoked_at', null)
+    .returns<{ id: string; scope_type: string; scope_id: string | null; roles: { key: string; name: string } | null }[]>();
+  if (error) throw error;
+
+  const rows = (data ?? []).filter((r) => r.roles && r.roles.key !== 'staff');
+  const gradeIds = rows.filter((r) => r.scope_type === 'grade' && r.scope_id).map((r) => r.scope_id as string);
+  const classIds = rows.filter((r) => r.scope_type === 'class' && r.scope_id).map((r) => r.scope_id as string);
+
+  const [gradesRes, classesRes] = await Promise.all([
+    gradeIds.length
+      ? supabase.from('grades').select('id, name').in('id', gradeIds).returns<{ id: string; name: string }[]>()
+      : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
+    classIds.length
+      ? supabase.from('classes').select('id, name').in('id', classIds).returns<{ id: string; name: string }[]>()
+      : Promise.resolve({ data: [] as { id: string; name: string }[], error: null }),
+  ]);
+  if (gradesRes.error) throw gradesRes.error;
+  if (classesRes.error) throw classesRes.error;
+  const gradeNameById = new Map((gradesRes.data ?? []).map((g) => [g.id, g.name]));
+  const classNameById = new Map((classesRes.data ?? []).map((c) => [c.id, c.name]));
+
+  return rows.map((r) => ({
+    id: r.id,
+    roleKey: r.roles!.key,
+    roleName: r.roles!.name,
+    scopeType: r.scope_type as RoleResponsibility['scopeType'],
+    scopeLabel:
+      r.scope_type === 'grade'
+        ? (r.scope_id && gradeNameById.get(r.scope_id)) || null
+        : r.scope_type === 'class'
+          ? (r.scope_id && classNameById.get(r.scope_id)) || null
+          : null,
+  }));
+}
+
 /** "Same data reachable from person and from duty" — the duty roster view (task 17's completion test). */
 export async function fetchDutyRoster(): Promise<Responsibility[]> {
   const { data, error } = await supabase

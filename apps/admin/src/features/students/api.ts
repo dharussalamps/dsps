@@ -10,6 +10,8 @@ export type StudentSummary = {
   status: 'active' | 'inactive' | 'left';
 };
 
+export type UnassignedStudent = StudentSummary & { hasAttendance: boolean };
+
 export type ClassSummary = {
   id: string;
   name: string;
@@ -147,10 +149,13 @@ export async function listStudentsInClasses(classIds: string[]): Promise<(Studen
 }
 
 /** Students with no enrolment in the current academic year — see list_unassigned_students() migration comment for why this is an RPC rather than a plain select. */
-export async function listUnassignedStudents(): Promise<StudentSummary[]> {
+export async function listUnassignedStudents(): Promise<UnassignedStudent[]> {
   const { data, error } = await supabase.rpc('list_unassigned_students');
   if (error) throw error;
-  return ((data ?? []) as unknown as StudentRow[]).map(toStudentSummary);
+  return ((data ?? []) as unknown as (StudentRow & { has_attendance: boolean })[]).map((row) => ({
+    ...toStudentSummary(row),
+    hasAttendance: row.has_attendance,
+  }));
 }
 
 /** Search scoped to students already enrolled somewhere this year, each tagged with their current class — the "remove from class" tab's search. */
@@ -273,6 +278,17 @@ export async function createStudent(input: NewStudentInput): Promise<string> {
 /** FR-STU-12: marks a student left (or reactivates one), retaining all their records. */
 export async function setStudentStatus(studentId: string, status: 'active' | 'inactive' | 'left', reason?: string): Promise<void> {
   const { error } = await supabase.rpc('set_student_status', { p_student_id: studentId, p_status: status, p_reason: reason || null });
+  if (error) throw error;
+}
+
+/**
+ * Permanently erases a student record — unlike setStudentStatus('left'),
+ * this cannot be undone. The RPC itself refuses when the student is
+ * currently assigned to a class or has any attendance recorded, so this is
+ * only ever safe to offer from the unassigned list.
+ */
+export async function deleteStudent(studentId: string, reason?: string): Promise<void> {
+  const { error } = await supabase.rpc('delete_student', { p_student_id: studentId, p_reason: reason || null });
   if (error) throw error;
 }
 

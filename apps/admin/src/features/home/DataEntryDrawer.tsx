@@ -17,7 +17,7 @@ const APP_VERSION = Constants.expoConfig?.version ?? '1.0.0';
 // so they're one tap from Home instead of buried in that catch-all list.
 export const dataEntryMenu: MenuItem[] = [
   { label: 'Staff attendance', route: 'MarkStaffAttendance', icon: 'checkmark-circle-outline' },
-  { label: 'My leave', route: 'MyLeave', icon: 'briefcase-outline' },
+  { label: 'Request leave', route: 'MyLeave', icon: 'briefcase-outline' },
   { label: 'Assign cover teacher', route: 'AssignCover', icon: 'swap-horizontal-outline' },
   { label: 'Inventory', route: 'Inventory', icon: 'cube-outline' },
   { label: 'Events', route: 'EventCalendar', icon: 'calendar-outline' },

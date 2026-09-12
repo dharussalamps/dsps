@@ -70,8 +70,9 @@ where staff_id = (select id from staff where staff_no = 'T001') and on_date = '2
 -- once with an accurate "just submitted" notification, then is updated to
 -- its final status separately (an UPDATE doesn't re-fire that trigger).
 -- ---------------------------------------------------------------------
-insert into leave_requests (staff_id, leave_type_id, starts_on, ends_on, day_count, reason, status)
+insert into leave_requests (staff_id, requested_by, leave_type_id, starts_on, ends_on, day_count, reason, status)
 select (select id from staff where staff_no = 'T001'),
+       (select id from staff where staff_no = 'T001'),
        (select id from leave_types where key = 'medical'),
        '2026-09-04', '2026-09-08', 5, 'Recovering from viral fever, doctor advised rest.', 'pending'
 where not exists (
@@ -85,16 +86,18 @@ set status = 'approved',
     cover_assignment_id = (select id from cover_assignments where class_id = (select id from classes where name = '1A') and starts_on = '2026-09-04')
 where staff_id = (select id from staff where staff_no = 'T001') and starts_on = '2026-09-04' and status = 'pending';
 
-insert into leave_requests (staff_id, leave_type_id, starts_on, ends_on, day_count, reason, status)
+insert into leave_requests (staff_id, requested_by, leave_type_id, starts_on, ends_on, day_count, reason, status)
 select (select id from staff where staff_no = 'T002'),
+       (select id from staff where staff_no = 'T002'),
        (select id from leave_types where key = 'duty'),
        '2026-09-15', '2026-09-16', 2, 'Attending zonal science fair as coordinator.', 'pending'
 where not exists (
   select 1 from leave_requests where staff_id = (select id from staff where staff_no = 'T002') and starts_on = '2026-09-15'
 );
 
-insert into leave_requests (staff_id, leave_type_id, starts_on, ends_on, day_count, reason, status)
+insert into leave_requests (staff_id, requested_by, leave_type_id, starts_on, ends_on, day_count, reason, status)
 select (select id from staff where staff_no = 'T003'),
+       (select id from staff where staff_no = 'T003'),
        (select id from leave_types where key = 'casual'),
        '2026-08-20', '2026-08-20', 1, 'Personal matter.', 'pending'
 where not exists (

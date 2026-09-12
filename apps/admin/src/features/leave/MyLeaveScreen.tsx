@@ -1,13 +1,17 @@
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { addDays, differenceInCalendarDays, eachDayOfInterval, endOfMonth, format, getISODay, isValid, parseISO, startOfMonth, subMonths } from 'date-fns';
+import { addDays, differenceInCalendarDays, eachDayOfInterval, endOfMonth, format, getISODay, isValid, parseISO, startOfMonth } from 'date-fns';
 import { useState } from 'react';
 import { Alert, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, CalendarModal, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SectionHeader, StatusPill, TextField, type IconName } from '@/components';
+import { Button, Card, CalendarModal, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SectionHeader, StatusPill, TextField } from '@/components';
+import { useCanRequestLeaveForOthers } from '@/features/accounts/hooks';
 import { useAcademicYears, useCalendarDaysInRange, useCurrentYearTerms, useWorkingWeekdays } from '@/features/calendar/hooks';
+import { listStaff, type StaffSummary } from '@/features/staff/api';
 import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import { formatDMYInput, parseDMY, toDMY } from '@/lib/date';
 import { useAuthStore } from '@/store/authStore';
+import type { RootStackParamList } from '@/navigation/types';
 import { colors, elevation, radius, spacing, typography, semantic } from '@/theme/tokens';
 import {
   addSchoolDays,
@@ -21,26 +25,12 @@ import {
   SHORT_LEAVE_KEY,
   SHORT_LEAVE_MONTHLY_CAP,
   withdrawLeave,
-  type LeaveBalance,
   type LeaveRequestRow,
   type LeaveType,
   type MaternityChainTip,
 } from './api';
 import { useLeaveTypes, useMaternityChainTip, useMyLeaveBalances, useMyLeaveRequests } from './hooks';
-
-const statusTone: Record<string, 'success' | 'warning' | 'error' | 'neutral'> = {
-  pending: 'warning',
-  approved: 'success',
-  rejected: 'error',
-  withdrawn: 'neutral',
-};
-
-const statusAccentColor: Record<string, string> = {
-  pending: colors.warning,
-  approved: colors.success,
-  rejected: colors.error,
-  withdrawn: colors.ink300,
-};
+import { leaveTypeIcon, LeaveBalanceCard, LeaveTrendCard, statusAccentColor, statusTone } from './LeaveDisplay';
 
 /** Requested display order for the leave-type dropdown — not alphabetical. */
 const LEAVE_TYPE_DROPDOWN_ORDER = [SHORT_LEAVE_KEY, 'casual', 'medical', 'duty', 'maternity'];
@@ -51,24 +41,42 @@ function leaveTypeOrderIndex(key: string): number {
   return i === -1 ? LEAVE_TYPE_DROPDOWN_ORDER.length : i;
 }
 
-const LEAVE_TYPE_ICON: Record<string, IconName> = {
-  [SHORT_LEAVE_KEY]: 'flash-outline',
-  casual: 'sunny-outline',
-  medical: 'medkit-outline',
-  duty: 'briefcase-outline',
-  [MATERNITY_KEY]: 'heart-outline',
-};
-function leaveTypeIcon(key: string | undefined): IconName {
-  return (key && LEAVE_TYPE_ICON[key]) || 'document-text-outline';
-}
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export function MyLeaveScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<Nav>();
   const staff = useAuthStore((s) => s.staff);
   const queryClient = useQueryClient();
   const leaveTypes = useLeaveTypes();
-  const balances = useMyLeaveBalances(staff?.id);
-  const requests = useMyLeaveRequests(staff?.id);
+
+  // A principal/administrator may file this request for another staff
+  // member instead of themselves (request_leave RLS, see
+  // 20260912100000_leave_request_for_others.sql) — everything below,
+  // balances/history/trend included, is scoped to whichever staff member
+  // is currently in effect, not always the signed-in user.
+  const canRequestForOthers = useCanRequestLeaveForOthers();
+  const [requestMode, setRequestMode] = useState<'self' | 'other'>('self');
+  const [targetStaff, setTargetStaff] = useState<StaffSummary | null>(null);
+  const [staffQuery, setStaffQuery] = useState('');
+  const [staffResults, setStaffResults] = useState<StaffSummary[]>([]);
+  const isSelf = requestMode === 'self';
+  const effectiveStaffId = isSelf ? staff?.id : targetStaff?.id;
+  const effectiveStaffName = isSelf ? (staff?.fullName ?? '') : (targetStaff?.fullName ?? '');
+
+  async function searchOtherStaff(q: string) {
+    setStaffQuery(q);
+    setStaffResults(q.trim() ? await listStaff(q) : []);
+  }
+
+  function switchToSelf() {
+    setRequestMode('self');
+    setTargetStaff(null);
+    setStaffQuery('');
+    setStaffResults([]);
+  }
+
+  const balances = useMyLeaveBalances(effectiveStaffId);
+  const requests = useMyLeaveRequests(effectiveStaffId);
   // "Half Day" isn't its own request type — every leave type can be marked
   // half day via the Full day/Half day toggle below, so it's dropped from
   // the picker to avoid a redundant, confusing option.
@@ -113,7 +121,7 @@ export function MyLeaveScreen() {
   const requiresSchoolDay = selectedTypeKey !== 'duty' && selectedTypeKey !== MATERNITY_KEY;
   const todayIso = format(new Date(), 'yyyy-MM-dd');
 
-  const maternityChainTip = useMaternityChainTip(staff?.id);
+  const maternityChainTip = useMaternityChainTip(effectiveStaffId);
 
   // Live preview of maternity leave's computed end date — 84 school days
   // from the picked start, worked out server-side (add_school_days) since
@@ -166,6 +174,7 @@ export function MyLeaveScreen() {
 
   async function submitRequest(input: {
     staffId: string;
+    requestedBy: string;
     leaveTypeId: string;
     startsOn: string;
     endsOn: string;
@@ -212,10 +221,17 @@ export function MyLeaveScreen() {
 
   async function submit() {
     setError(null);
-    if (!staff?.id || !leaveTypeId || !reason.trim()) {
+    if (!staff?.id) return;
+    if (!effectiveStaffId) {
+      setError('Pick a staff member to request leave for.');
+      return;
+    }
+    if (!leaveTypeId || !reason.trim()) {
       setError('Select a leave type and enter a reason.');
       return;
     }
+    const requesterId = staff.id;
+    const targetId = effectiveStaffId;
     const trimmedReason = reason.trim();
     const selectedType = leaveTypes.data?.find((t) => t.id === leaveTypeId);
     const isShortLeave = selectedType?.key === SHORT_LEAVE_KEY;
@@ -318,12 +334,14 @@ export function MyLeaveScreen() {
     if (isBalanceLimited) {
       const bal = balances.data?.find((b) => b.leaveTypeId === leaveTypeId);
       if (!bal || bal.entitled <= 0) {
-        setError(`No ${selectedType?.name ?? 'leave'} balance has been allocated for you — ask the principal to set one in Leave Allocation.`);
+        const subject = isSelf ? 'you' : effectiveStaffName;
+        setError(`No ${selectedType?.name ?? 'leave'} balance has been allocated for ${subject} — ask the principal to set one in Leave Allocation.`);
         return;
       }
       if (bal.used + dayCount > bal.entitled) {
         const remaining = Math.max(0, bal.entitled - bal.used);
-        setError(`This request needs ${dayCount} day${dayCount === 1 ? '' : 's'}, but only ${remaining} remain${remaining === 1 ? 's' : ''} in your ${bal.leaveTypeName} balance.`);
+        const possessive = isSelf ? 'your' : `${effectiveStaffName}'s`;
+        setError(`This request needs ${dayCount} day${dayCount === 1 ? '' : 's'}, but only ${remaining} remain${remaining === 1 ? 's' : ''} in ${possessive} ${bal.leaveTypeName} balance.`);
         return;
       }
     }
@@ -334,16 +352,17 @@ export function MyLeaveScreen() {
       (r) => (r.status === 'pending' || r.status === 'approved') && isoStartsOn <= r.endsOn && r.startsOn <= isoEndsOn,
     );
     if (overlapping) {
-      setError(`You already have a ${overlapping.status} ${overlapping.leaveTypeName} request covering this date.`);
+      const subject = isSelf ? 'You already have' : `${effectiveStaffName} already has`;
+      setError(`${subject} a ${overlapping.status} ${overlapping.leaveTypeName} request covering this date.`);
       return;
     }
 
-    if (isShortLeave && staff?.id) {
+    if (isShortLeave) {
       setSubmitting(true);
       let usedThisMonth: number;
       try {
         usedThisMonth = await countMonthlyLeaveRequests(
-          staff.id,
+          targetId,
           leaveTypeId,
           format(startOfMonth(parseISO(isoStartsOn)), 'yyyy-MM-dd'),
           format(endOfMonth(parseISO(isoStartsOn)), 'yyyy-MM-dd'),
@@ -357,16 +376,17 @@ export function MyLeaveScreen() {
 
       if (usedThisMonth >= SHORT_LEAVE_MONTHLY_CAP) {
         const casualTypeId = leaveTypes.data?.find((t) => t.key === 'casual')?.id;
+        const subject = isSelf ? "You've" : `${effectiveStaffName} has`;
         Alert.alert(
           'Monthly short leave limit reached',
-          `You've already used your ${SHORT_LEAVE_MONTHLY_CAP} short leaves this month. This request will be submitted as a half-day Casual Leave instead.`,
+          `${subject} already used ${isSelf ? 'your' : 'their'} ${SHORT_LEAVE_MONTHLY_CAP} short leaves this month. This request will be submitted as a half-day Casual Leave instead.`,
           [
             { text: 'Cancel', style: 'cancel' },
             {
               text: 'Continue',
               onPress: () => {
                 if (!casualTypeId) return;
-                void submitRequest({ staffId: staff.id, leaveTypeId: casualTypeId, startsOn: isoStartsOn, endsOn: isoEndsOn, halfDay: true, dayCount: 0.5, reason: trimmedReason });
+                void submitRequest({ staffId: targetId, requestedBy: requesterId, leaveTypeId: casualTypeId, startsOn: isoStartsOn, endsOn: isoEndsOn, halfDay: true, dayCount: 0.5, reason: trimmedReason });
               },
             },
           ],
@@ -376,7 +396,8 @@ export function MyLeaveScreen() {
     }
 
     await submitRequest({
-      staffId: staff.id,
+      staffId: targetId,
+      requestedBy: requesterId,
       leaveTypeId,
       startsOn: isoStartsOn,
       endsOn: isoEndsOn,
@@ -391,7 +412,12 @@ export function MyLeaveScreen() {
     <Screen padded={false} edges={['left', 'right']}>
       <Hero style={{ overflow: 'hidden' }}>
         <HeroDoodle topIcon="airplane-outline" bottomIcon="calendar-outline" />
-        <ScreenHeader title="Request leave" tone="onPrimary" back={navigation.canGoBack()} />
+        <ScreenHeader
+          title="Request leave"
+          subtitle={!isSelf && targetStaff ? `For ${targetStaff.fullName}` : undefined}
+          tone="onPrimary"
+          back={navigation.canGoBack()}
+        />
         <View style={heroStyles.statsRow}>
           <HeroStat value={pendingCount} label="Pending" />
           <View style={heroStyles.statDivider} />
@@ -402,11 +428,52 @@ export function MyLeaveScreen() {
       </Hero>
       <View style={{ padding: spacing.lg, gap: spacing.lg }}>
 
+      {canRequestForOthers ? (
+        <Card>
+          <SectionHeader icon="people-outline" label="REQUESTING FOR" />
+          <View style={{ flexDirection: 'row', gap: spacing.xs }}>
+            <Button label="Myself" size="sm" variant={isSelf ? 'primary' : 'outline'} onPress={switchToSelf} style={{ flex: 1 }} />
+            <Button
+              label="Someone else"
+              size="sm"
+              variant={!isSelf ? 'primary' : 'outline'}
+              onPress={() => setRequestMode('other')}
+              style={{ flex: 1 }}
+            />
+          </View>
+          {!isSelf ? (
+            <>
+              <TextField label="Staff (search)" placeholder="Search by name or staff no." value={staffQuery} onChangeText={(v) => void searchOtherStaff(v)} />
+              {staffQuery && !targetStaff ? (
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs }}>
+                  {staffResults
+                    .filter((s) => s.id !== staff?.id)
+                    .map((s) => (
+                      <Button
+                        key={s.id}
+                        label={s.fullName}
+                        size="sm"
+                        variant="outline"
+                        onPress={() => {
+                          setTargetStaff(s);
+                          setStaffQuery(s.fullName);
+                          setStaffResults([]);
+                        }}
+                      />
+                    ))}
+                </View>
+              ) : null}
+            </>
+          ) : null}
+        </Card>
+      ) : null}
+
       <Button
         label={showForm ? 'Cancel' : 'Request'}
         icon={showForm ? 'close' : 'add'}
         variant="secondary"
         onPress={() => setShowForm((v) => !v)}
+        disabled={!effectiveStaffId}
       />
 
       {showForm ? (
@@ -501,43 +568,54 @@ export function MyLeaveScreen() {
         </Card>
       ) : null}
 
-      <View style={{ gap: spacing.sm }}>
-        <SectionHeader icon="wallet-outline" label="BALANCES" />
-        {(balances.data ?? []).map((b) => (
-          <LeaveBalanceCard key={b.leaveTypeId} balance={b} />
-        ))}
-      </View>
+      {!effectiveStaffId ? (
+        <EmptyState title="Pick a staff member" message="Choose who you're requesting leave for to see their balances and history." />
+      ) : (
+        <>
+          <View style={{ gap: spacing.sm }}>
+            <SectionHeader icon="wallet-outline" label={isSelf ? 'BALANCES' : `BALANCES · ${effectiveStaffName}`} />
+            {(balances.data ?? []).map((b) => (
+              <LeaveBalanceCard key={b.leaveTypeId} balance={b} />
+            ))}
+          </View>
 
-      {maternityChainTip.data ? (
-        <View style={{ gap: spacing.sm }}>
-          <SectionHeader icon="heart-outline" label="MATERNITY LEAVE" />
-          <MaternityChainCard tip={maternityChainTip.data} staffId={staff?.id} onExtended={invalidate} />
-        </View>
-      ) : null}
-
-      <View style={{ gap: spacing.sm }}>
-        <SectionHeader icon="trending-up-outline" label="LEAVE TREND" />
-        <LeaveTrendCard requests={requests.data ?? []} />
-      </View>
-
-      <View style={{ gap: spacing.sm }}>
-        <SectionHeader icon="time-outline" label="HISTORY" />
-        {requests.data && requests.data.length > 0 ? (
-          groupRequestsByStatus(requests.data).map((group) => (
-            <View key={group.status} style={{ gap: spacing.sm }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                <StatusPill label={group.status} tone={statusTone[group.status]} />
-                <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{group.items.length}</Text>
-              </View>
-              {group.items.map((r) => (
-                <HistoryRow key={r.id} request={r} onWithdrawn={invalidate} />
-              ))}
+          {maternityChainTip.data ? (
+            <View style={{ gap: spacing.sm }}>
+              <SectionHeader icon="heart-outline" label="MATERNITY LEAVE" />
+              <MaternityChainCard tip={maternityChainTip.data} staffId={effectiveStaffId} requestedBy={staff?.id} onExtended={invalidate} />
             </View>
-          ))
-        ) : (
-          <EmptyState title="No leave requests yet" />
-        )}
-      </View>
+          ) : null}
+
+          <View style={{ gap: spacing.sm }}>
+            <SectionHeader icon="trending-up-outline" label="LEAVE TREND" />
+            <LeaveTrendCard requests={requests.data ?? []} />
+          </View>
+
+          <View style={{ gap: spacing.sm }}>
+            <SectionHeader icon="time-outline" label={isSelf ? 'HISTORY' : `HISTORY · ${effectiveStaffName}`} />
+            {requests.data && requests.data.length > 0 ? (
+              groupRequestsByStatus(requests.data).map((group) => (
+                <View key={group.status} style={{ gap: spacing.sm }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+                    <StatusPill label={group.status} tone={statusTone[group.status]} />
+                    <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{group.items.length}</Text>
+                  </View>
+                  {group.items.map((r) => (
+                    <HistoryRow
+                      key={r.id}
+                      request={r}
+                      onWithdrawn={invalidate}
+                      onPress={r.status === 'pending' ? () => navigation.navigate('LeaveRequestDetail', { requestId: r.id }) : undefined}
+                    />
+                  ))}
+                </View>
+              ))
+            ) : (
+              <EmptyState title="No leave requests yet" />
+            )}
+          </View>
+        </>
+      )}
       </View>
     </Screen>
   );
@@ -634,7 +712,17 @@ function DateField({
 }
 
 /** Shows where a staff member's maternity leave chain currently stands, and — if it hasn't reached its terminal phase — an action to request the next one. Dates are entirely system-computed; nothing here is typed by the user. */
-function MaternityChainCard({ tip, staffId, onExtended }: { tip: MaternityChainTip; staffId: string | undefined; onExtended: () => Promise<void> }) {
+function MaternityChainCard({
+  tip,
+  staffId,
+  requestedBy,
+  onExtended,
+}: {
+  tip: MaternityChainTip;
+  staffId: string | undefined;
+  requestedBy: string | undefined;
+  onExtended: () => Promise<void>;
+}) {
   const [extending, setExtending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -643,11 +731,11 @@ function MaternityChainCard({ tip, staffId, onExtended }: { tip: MaternityChainT
   const nextEndsOn = addDays(nextStartsOn, MATERNITY_PHASE_DAYS - 1);
 
   async function extend() {
-    if (!staffId || !nextPhase) return;
+    if (!staffId || !requestedBy || !nextPhase) return;
     setError(null);
     setExtending(true);
     try {
-      await extendMaternityLeave({ staffId, tip, reason: `${MATERNITY_PHASE_LABEL[nextPhase]} extension` });
+      await extendMaternityLeave({ staffId, requestedBy, tip, reason: `${MATERNITY_PHASE_LABEL[nextPhase]} extension` });
       await onExtended();
     } catch {
       setError('Could not submit this extension. Please try again.');
@@ -693,11 +781,12 @@ function MaternityChainCard({ tip, staffId, onExtended }: { tip: MaternityChainT
 }
 
 /** Compact single-row layout — the status is already conveyed by which group header the row sits under (see groupRequestsByStatus), so it isn't repeated per-row here as it once was. */
-function HistoryRow({ request, onWithdrawn }: { request: LeaveRequestRow; onWithdrawn: () => Promise<void> }) {
+/** A pending request's row is tappable through to LeaveRequestDetail — whoever can act on it (principal/administrator) gets Approve/Reject there; RLS is the real gate, so tapping through is harmless for anyone else, same pattern as StaffProfileScreen's Leave tab and LeaveRequestsScreen. Approved/withdrawn/rejected rows are read-only history and stay non-tappable. */
+function HistoryRow({ request, onWithdrawn, onPress }: { request: LeaveRequestRow; onWithdrawn: () => Promise<void>; onPress?: () => void }) {
   const typeLabel = request.maternityPhase ? `${request.leaveTypeName} — ${MATERNITY_PHASE_LABEL[request.maternityPhase]}` : request.leaveTypeName;
 
   return (
-    <Card flat style={styles.historyCard}>
+    <Card onPress={onPress} flat style={styles.historyCard}>
       <View style={[styles.historyAccent, { backgroundColor: statusAccentColor[request.status] }]} />
       <View style={styles.historyIconWrap}>
         <Icon name={leaveTypeIcon(request.leaveTypeKey)} size={14} color={semantic.primary} />
@@ -712,55 +801,27 @@ function HistoryRow({ request, onWithdrawn }: { request: LeaveRequestRow; onWith
         <Text style={{ ...typography.caption, color: semantic.textSecondary }} numberOfLines={1}>
           {request.reason}
         </Text>
+        {request.requestedBy !== request.staffId ? (
+          <Text style={{ ...typography.caption, color: semantic.textSecondary, fontStyle: 'italic' }} numberOfLines={1}>
+            Requested by {request.requestedByName}
+          </Text>
+        ) : null}
       </View>
       {request.status === 'pending' ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Withdraw request"
-          onPress={() => void withdrawLeave(request.id).then(onWithdrawn)}
-          hitSlop={8}
-          style={({ pressed }) => [styles.withdrawChip, pressed && styles.withdrawChipPressed]}
-        >
-          <Icon name="close-circle-outline" size={13} color={colors.error} />
-          <Text style={styles.withdrawChipLabel}>Withdraw</Text>
-        </Pressable>
+        <>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Withdraw request"
+            onPress={() => void withdrawLeave(request.id).then(onWithdrawn)}
+            hitSlop={8}
+            style={({ pressed }) => [styles.withdrawChip, pressed && styles.withdrawChipPressed]}
+          >
+            <Icon name="close-circle-outline" size={13} color={colors.error} />
+            <Text style={styles.withdrawChipLabel}>Withdraw</Text>
+          </Pressable>
+          {onPress ? <Icon name="chevron-forward" size={16} color={semantic.textSecondary} /> : null}
+        </>
       ) : null}
-    </Card>
-  );
-}
-
-function LeaveBalanceCard({ balance }: { balance: LeaveBalance }) {
-  const pct = balance.entitled > 0 ? Math.min(100, Math.round((balance.used / balance.entitled) * 100)) : 0;
-  const remaining = Math.max(0, balance.entitled - balance.used);
-  const fillColor = pct >= 100 ? colors.error : pct >= 75 ? colors.warning : colors.success;
-  const isMonthly = balance.leaveTypeKey === SHORT_LEAVE_KEY;
-  const periodWord = isMonthly ? 'month' : 'year';
-
-  return (
-    <Card flat style={{ gap: spacing.sm }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 }}>
-          <View style={styles.balanceIconWrap}>
-            <Icon name={leaveTypeIcon(balance.leaveTypeKey)} size={16} color={semantic.primary} />
-          </View>
-          <View style={{ gap: 2, flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-              <Text style={{ ...typography.body, color: semantic.textPrimary }}>{balance.leaveTypeName}</Text>
-              <StatusPill label={isMonthly ? 'Monthly' : 'Annual'} tone={isMonthly ? 'gold' : 'info'} />
-            </View>
-          </View>
-        </View>
-        <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>
-          {balance.used} / {balance.entitled} used
-        </Text>
-      </View>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: fillColor }]} />
-      </View>
-      <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
-        {remaining} remaining this {periodWord}
-        {isMonthly ? ' · resets next month' : ''}
-      </Text>
     </Card>
   );
 }
@@ -771,62 +832,6 @@ function groupRequestsByStatus(requests: LeaveRequestRow[]) {
   return order
     .map((status) => ({ status, items: requests.filter((r) => r.status === status) }))
     .filter((group) => group.items.length > 0);
-}
-
-/** Last 6 calendar months, oldest first, with approved day_count summed per month. startsOn is already an ISO 'yyyy-MM-dd' string, so slicing to 'yyyy-MM' avoids a parse/timezone round trip. */
-function buildMonthlyTrend(requests: LeaveRequestRow[]) {
-  const now = new Date();
-  const months = Array.from({ length: 6 }, (_, i) => {
-    const monthDate = subMonths(now, 5 - i);
-    return { key: format(monthDate, 'yyyy-MM'), label: format(monthDate, 'MMM'), days: 0 };
-  });
-  const byKey = new Map(months.map((m) => [m.key, m]));
-  for (const r of requests) {
-    if (r.status !== 'approved') continue;
-    const bucket = byKey.get(r.startsOn.slice(0, 7));
-    if (bucket) bucket.days += r.dayCount;
-  }
-  return months;
-}
-
-function LeaveTrendCard({ requests }: { requests: LeaveRequestRow[] }) {
-  const months = buildMonthlyTrend(requests);
-  const maxDays = Math.max(1, ...months.map((m) => m.days));
-  const approvedCount = requests.filter((r) => r.status === 'approved').length;
-  const pendingCount = requests.filter((r) => r.status === 'pending').length;
-  const rejectedCount = requests.filter((r) => r.status === 'rejected').length;
-
-  return (
-    <Card flat style={{ gap: spacing.md }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
-        <TrendStat label="Approved" value={approvedCount} color={colors.success} />
-        <TrendStat label="Pending" value={pendingCount} color={colors.warning} />
-        <TrendStat label="Rejected" value={rejectedCount} color={colors.error} />
-      </View>
-      <View style={styles.trendChart}>
-        {months.map((m) => (
-          <View key={m.key} style={styles.trendColumn}>
-            <View style={styles.trendBarTrack}>
-              <View style={[styles.trendBar, { height: `${(m.days / maxDays) * 100}%` }]} />
-            </View>
-            <Text style={styles.trendMonthLabel}>{m.label}</Text>
-          </View>
-        ))}
-      </View>
-      <Text style={{ ...typography.caption, color: semantic.textSecondary, textAlign: 'center' }}>
-        Approved days taken per month, last 6 months
-      </Text>
-    </Card>
-  );
-}
-
-function TrendStat({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <View style={{ alignItems: 'center', gap: 2 }}>
-      <Text style={{ ...typography.subtitle, color }}>{value}</Text>
-      <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{label}</Text>
-    </View>
-  );
 }
 
 function HeroStat({ value, label }: { value: number | string; label: string }) {
@@ -854,8 +859,6 @@ const heroStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  progressTrack: { height: 6, borderRadius: radius.pill, backgroundColor: semantic.surfaceAlt, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: radius.pill },
   balanceIconWrap: {
     width: 32,
     height: 32,
@@ -885,11 +888,6 @@ const styles = StyleSheet.create({
   },
   withdrawChipPressed: { opacity: 0.7 },
   withdrawChipLabel: { ...typography.caption, color: colors.error, fontWeight: '700' },
-  trendChart: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
-  trendColumn: { flex: 1, alignItems: 'center', gap: spacing.xs },
-  trendBarTrack: { width: 18, height: 60, borderRadius: radius.sm, backgroundColor: semantic.surfaceAlt, justifyContent: 'flex-end', overflow: 'hidden' },
-  trendBar: { width: '100%', borderRadius: radius.sm, backgroundColor: semantic.primary },
-  trendMonthLabel: { fontSize: 11, color: semantic.textSecondary },
 });
 
 const selectStyles = StyleSheet.create({

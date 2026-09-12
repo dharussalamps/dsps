@@ -39,8 +39,9 @@ select (select id from staff where staff_no = 'TEST-LEAVE-PRINCIPAL'),
 insert into leave_types (key, name, annual_entitlement) values ('test_leave_type', 'Test Leave Type', 10)
 on conflict (key) do nothing;
 
-insert into leave_requests (staff_id, leave_type_id, starts_on, ends_on, day_count, reason)
+insert into leave_requests (staff_id, requested_by, leave_type_id, starts_on, ends_on, day_count, reason)
 values (
+  (select id from staff where staff_no = 'TEST-LEAVE-TEACHER'),
   (select id from staff where staff_no = 'TEST-LEAVE-TEACHER'),
   (select id from leave_types where key = 'test_leave_type'),
   '2099-07-01', '2099-07-02', 2, 'Test reason'
