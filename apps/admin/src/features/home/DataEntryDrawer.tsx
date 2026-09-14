@@ -1,8 +1,12 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Constants from 'expo-constants';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { memo } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+// See Card.tsx for why this drawer content uses gesture-handler's Pressable instead of core RN's.
+import { Pressable } from 'react-native-gesture-handler';
 import { Avatar, Card, Hero, HeroDoodle, Icon, type IconName } from '@/components';
 import { useMyRoleKeys } from '@/features/accounts/hooks';
+import { useUnreadAnnouncementCount } from '@/features/announcements/hooks';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
@@ -30,48 +34,100 @@ function formatRoleLabel(key: string): string {
     .join(' ');
 }
 
-export function DataEntryDrawerContent({ navigation, onClose }: { navigation: Nav; onClose: () => void }) {
+/**
+ * Isolated so its query-driven re-renders don't ripple up into DataEntryDrawerContent — that
+ * used to re-render every menu Card (including the Pressable a tap was landing on) whenever
+ * the unread count changed, which was implicated in the Announcements item needing two taps
+ * to open (a render arriving mid-touch dropped the first one). Same fix as AnnouncementsTabScreen
+ * in TabsNavigator.tsx for the tab bar's own badge.
+ */
+const AnnouncementsMenuBadge = memo(function AnnouncementsMenuBadge({ staffId }: { staffId: string | undefined }) {
+  const unread = useUnreadAnnouncementCount(staffId);
+  const count = unread.data ?? 0;
+  if (count <= 0) return null;
+  return (
+    <View style={styles.badge}>
+      <Text style={styles.badgeLabel} numberOfLines={1}>
+        {count > 99 ? '99+' : String(count)}
+      </Text>
+    </View>
+  );
+});
+
+/**
+ * Isolated for the same reason as AnnouncementsMenuBadge above: useMyRoleKeys() resolves
+ * from loading to success shortly after the drawer mounts, and if that state change were
+ * read directly in DataEntryDrawerContent it would re-render every menu Card (including
+ * whichever one a tap was landing on) — the same "needs two taps" bug the badge isolation
+ * fixed, but for the identity block's role chips instead of the unread count.
+ */
+const DrawerIdentity = memo(function DrawerIdentity({ navigation, onClose }: { navigation: Nav; onClose: () => void }) {
   const staff = useAuthStore((s) => s.staff);
   const { data: roleKeys } = useMyRoleKeys();
+
+  if (!staff) return null;
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="View my profile"
+      onPress={() => {
+        onClose();
+        navigation.navigate('StaffProfile', { staffId: staff.id });
+      }}
+      style={({ pressed }) => [styles.identity, pressed && styles.identityPressed]}
+    >
+      <Avatar name={staff.fullName} tone="onPrimary" size={56} style={styles.avatar} />
+      <View style={styles.identityText}>
+        <Text style={styles.name} numberOfLines={1}>
+          {staff.fullName}
+        </Text>
+        <Text style={styles.staffNo}>{staff.staffNo}</Text>
+        {roleKeys && roleKeys.length > 0 ? (
+          <View style={styles.roleRow}>
+            {roleKeys.map((key) => (
+              <View key={key} style={styles.roleChip}>
+                <Icon name="shield-checkmark-outline" size={12} color={colors.gold900} />
+                <Text style={styles.roleChipLabel}>{formatRoleLabel(key)}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+      <Icon name="chevron-forward" size={18} color="rgba(255,255,255,0.75)" />
+    </Pressable>
+  );
+});
+
+export function DataEntryDrawerContent({ navigation, onClose }: { navigation: Nav; onClose: () => void }) {
+  const staffId = useAuthStore((s) => s.staff?.id);
 
   return (
     <View style={styles.container}>
       <Hero style={styles.hero}>
         <HeroDoodle topIcon="ribbon-outline" bottomIcon="briefcase-outline" />
-        {staff ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="View my profile"
-            onPress={() => {
-              onClose();
-              navigation.navigate('StaffProfile', { staffId: staff.id });
-            }}
-            style={({ pressed }) => [styles.identity, pressed && styles.identityPressed]}
-          >
-            <Avatar name={staff.fullName} tone="onPrimary" size={56} style={styles.avatar} />
-            <View style={styles.identityText}>
-              <Text style={styles.name} numberOfLines={1}>
-                {staff.fullName}
-              </Text>
-              <Text style={styles.staffNo}>{staff.staffNo}</Text>
-              {roleKeys && roleKeys.length > 0 ? (
-                <View style={styles.roleRow}>
-                  {roleKeys.map((key) => (
-                    <View key={key} style={styles.roleChip}>
-                      <Icon name="shield-checkmark-outline" size={12} color={colors.gold900} />
-                      <Text style={styles.roleChipLabel}>{formatRoleLabel(key)}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-            </View>
-            <Icon name="chevron-forward" size={18} color="rgba(255,255,255,0.75)" />
-          </Pressable>
-        ) : null}
+        <DrawerIdentity navigation={navigation} onClose={onClose} />
       </Hero>
 
       <ScrollView style={styles.menuScroll} contentContainerStyle={styles.menuWrap} showsVerticalScrollIndicator={false}>
         <Text style={styles.sectionLabel}>DSPS OFFICE</Text>
+        <Card
+          flat
+          style={styles.menuCard}
+          onPress={() => {
+            onClose();
+            navigation.navigate('Announcements');
+          }}
+        >
+          <View style={styles.menuRow}>
+            <View style={styles.iconWrap}>
+              <Icon name="megaphone-outline" size={18} color={semantic.primary} />
+            </View>
+            <Text style={styles.menuLabel}>Announcements</Text>
+            <AnnouncementsMenuBadge staffId={staffId} />
+            <Icon name="chevron-forward" size={16} color={colors.ink300} />
+          </View>
+        </Card>
         {dataEntryMenu.map((item) => (
           <Card
             key={item.route}
@@ -96,17 +152,17 @@ export function DataEntryDrawerContent({ navigation, onClose }: { navigation: Na
       <View style={styles.pinnedSection}>
         <Card
           flat
-          style={styles.menuCard}
+          style={styles.settingsCard}
           onPress={() => {
             onClose();
             navigation.navigate('Settings' as never);
           }}
         >
           <View style={styles.menuRow}>
-            <View style={styles.iconWrap}>
-              <Icon name="settings-outline" size={18} color={semantic.primary} />
+            <View style={styles.iconWrapNeutral}>
+              <Icon name="settings-outline" size={18} color={colors.ink500} />
             </View>
-            <Text style={styles.menuLabel}>Settings</Text>
+            <Text style={styles.menuLabelNeutral}>Settings</Text>
             <Icon name="chevron-forward" size={16} color={colors.ink300} />
           </View>
         </Card>
@@ -154,6 +210,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   menuLabel: { ...typography.body, color: semantic.textPrimary, flex: 1 },
+  iconWrapNeutral: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: colors.cream200,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuLabelNeutral: { ...typography.body, color: semantic.textSecondary, flex: 1 },
+  settingsCard: { padding: spacing.md, backgroundColor: 'transparent', borderColor: 'transparent' },
+  badge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: radius.pill,
+    paddingHorizontal: 5,
+    backgroundColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeLabel: { fontSize: 11, fontWeight: '700', color: colors.white },
   pinnedSection: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,

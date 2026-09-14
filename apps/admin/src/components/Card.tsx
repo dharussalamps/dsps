@@ -1,5 +1,10 @@
 import { PropsWithChildren } from 'react';
-import { Pressable, StyleSheet, View, ViewStyle } from 'react-native';
+import { StyleSheet, View, ViewStyle } from 'react-native';
+// react-native-gesture-handler's Pressable (not RN core's) so taps negotiate correctly with
+// any co-mounted gesture handler (e.g. the drawer's PanGestureHandler in TabsNavigator) — the
+// core Pressable's responder can lose that negotiation and drop the first tap after a
+// programmatic drawer open, requiring a second tap.
+import { Pressable } from 'react-native-gesture-handler';
 import { elevation, radius, semantic, spacing } from '@/theme/tokens';
 
 type Props = PropsWithChildren<{

@@ -44,7 +44,10 @@ export type RootStackParamList = {
   LeaveRequestDetail: { requestId: string };
   LeaveAllocation: undefined;
 
-  ComposeAnnouncement: undefined;
+  /** Pushed from the left drawer so it's reachable regardless of the Tabs' Announcements-vs-StaffTab role split — see DataEntryDrawer.tsx. */
+  Announcements: undefined;
+  /** Doubles as the edit form when `editing` is set — see ComposeAnnouncementScreen. Only title/body/priority are editable, so audience/schedule are omitted here. */
+  ComposeAnnouncement: { editing?: { id: string; title: string; body: string; priority: number } } | undefined;
 
   Inventory: undefined;
   InventoryItem: { itemId: string };

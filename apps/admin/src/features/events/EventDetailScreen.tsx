@@ -3,21 +3,27 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Text, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
+import { Avatar, Button, Card, EmptyState, HeaderIconButton, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SectionHeader, StatusPill, TextField } from '@/components';
 import { todayIso } from '@/features/attendance/hooks';
 import { useIsPrincipal } from '@/features/accounts/hooks';
 import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import { toDMY } from '@/lib/date';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
-import { spacing, typography, semantic } from '@/theme/tokens';
+import { colors, radius, spacing, typography, semantic } from '@/theme/tokens';
 import { addDiaryEntry, completeEvent, deleteEvent, updateEvent } from './api';
+import { DateTile } from './DateTile';
+import { categoryStyle } from './eventCategories';
 import { EventForm, type EventFormInitial, type EventFormPayload } from './EventForm';
 import { useCanCompleteEvent, useCanManageEvents, useEvent } from './hooks';
 
 type Route = RouteProp<RootStackParamList, 'EventDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+function formatEventDate(iso: string): string {
+  return format(parseISO(iso), 'EEE, d MMM yyyy');
+}
 
 export function EventDetailScreen() {
   const navigation = useNavigation<Nav>();
@@ -45,6 +51,9 @@ export function EventDetailScreen() {
       await addDiaryEntry({ onDate: event.data.startsOn, title: event.data.title, body: note.trim(), eventId: event.data.id, authorId: staff.id });
       setAddingToDiary(false);
       setNote('');
+      await queryClient.invalidateQueries({ queryKey: ['diary'] });
+      // So hasDiaryEntry is correct if the user navigates back to this event later.
+      await queryClient.invalidateQueries({ queryKey: ['events'] });
       navigation.navigate('Diary');
     } finally {
       setSaving(false);
@@ -72,7 +81,10 @@ export function EventDetailScreen() {
     setCompleting(true);
     try {
       await completeEvent(params.eventId);
-      await queryClient.invalidateQueries({ queryKey: ['events', 'detail', params.eventId] });
+      // Broad prefix: refreshes this detail view and the month/year list's status pill.
+      await queryClient.invalidateQueries({ queryKey: ['events'] });
+      // complete_event() auto-inserts a diary entry — refresh the diary list too.
+      await queryClient.invalidateQueries({ queryKey: ['diary'] });
       navigation.navigate('Diary');
     } catch (err) {
       Alert.alert('Could not mark this event completed', err instanceof Error ? err.message : 'Something went wrong — try again.');
@@ -84,8 +96,7 @@ export function EventDetailScreen() {
   async function handleUpdate(payload: EventFormPayload) {
     await updateEvent(params.eventId, payload);
     setEditing(false);
-    await queryClient.invalidateQueries({ queryKey: ['events', 'detail', params.eventId] });
-    await queryClient.invalidateQueries({ queryKey: ['events', 'month'] });
+    await queryClient.invalidateQueries({ queryKey: ['events'] });
   }
 
   function confirmDelete() {
@@ -103,7 +114,7 @@ export function EventDetailScreen() {
     setDeleting(true);
     try {
       await deleteEvent(params.eventId);
-      await queryClient.invalidateQueries({ queryKey: ['events', 'month'] });
+      await queryClient.invalidateQueries({ queryKey: ['events'] });
       navigation.goBack();
     } catch (err) {
       Alert.alert('Could not delete this event', err instanceof Error ? err.message : 'Something went wrong — try again.');
@@ -139,7 +150,9 @@ export function EventDetailScreen() {
 
   const e = event.data;
   const eventPassed = todayIso() >= (e.endsOn ?? e.startsOn);
-  const canDelete = isPrincipal && !e.completedAt;
+  const canDelete = isPrincipal && !e.hasDiaryEntry;
+  const dateRangeLabel =
+    e.endsOn && e.endsOn !== e.startsOn ? `${formatEventDate(e.startsOn)} → ${formatEventDate(e.endsOn)}` : formatEventDate(e.startsOn);
 
   if (editing) {
     const initial: EventFormInitial = {
@@ -150,7 +163,7 @@ export function EventDetailScreen() {
       endsOn: e.endsOn ? toDMY(e.endsOn) : undefined,
       location: e.location ?? undefined,
       reminderDays: e.reminderDays.length > 0 ? e.reminderDays.join(',') : '',
-      responsible: e.responsibleId ? { id: e.responsibleId, fullName: e.responsibleName ?? '' } : null,
+      responsible: e.responsible,
     };
     return (
       <Screen padded={false} edges={['left', 'right']}>
@@ -158,7 +171,7 @@ export function EventDetailScreen() {
           <HeroDoodle topIcon="star-outline" bottomIcon="calendar-outline" />
           <ScreenHeader title="Edit event" tone="onPrimary" back={navigation.canGoBack()} hideBell />
         </Hero>
-        <View style={{ padding: spacing.lg }}>
+        <View style={{ padding: spacing.lg, gap: spacing.lg }}>
           <EventForm
             initial={initial}
             headerIcon="create-outline"
@@ -168,21 +181,60 @@ export function EventDetailScreen() {
             onSubmit={handleUpdate}
             onCancel={() => setEditing(false)}
           />
+
+          {isPrincipal ? (
+            <Card style={{ gap: spacing.xs }}>
+              <SectionHeader icon="warning-outline" label="DANGER ZONE" />
+              <Button
+                label="Delete event"
+                icon="trash-outline"
+                variant="danger"
+                onPress={confirmDelete}
+                loading={deleting}
+                disabled={!canDelete}
+              />
+              <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
+                {canDelete
+                  ? 'This cannot be undone. This only works if it has no diary entry yet.'
+                  : 'Already saved to the diary — events with a diary entry cannot be deleted.'}
+              </Text>
+            </Card>
+          ) : null}
         </View>
       </Screen>
     );
   }
 
+  const cat = categoryStyle(e.category);
+  const status = e.completedAt ? { label: 'Completed', tone: 'success' as const } : eventPassed ? { label: 'Not completed', tone: 'warning' as const } : null;
+
   return (
     <Screen padded={false} edges={['left', 'right']}>
       <Hero style={{ overflow: 'hidden' }}>
         <HeroDoodle topIcon="star-outline" bottomIcon="calendar-outline" />
-        <ScreenHeader title={e.title} subtitle={e.startsOn} tone="onPrimary" back={navigation.canGoBack()} hideBell>
-          {canManage ? <Button label="Edit" icon="create-outline" size="sm" variant="secondary" onPress={() => setEditing(true)} /> : null}
+        <ScreenHeader title={e.title} tone="onPrimary" back={navigation.canGoBack()} hideBell>
+          {canManage ? <HeaderIconButton icon="create-outline" accessibilityLabel="Edit event" onPress={() => setEditing(true)} /> : null}
         </ScreenHeader>
+
+        <View style={styles.heroInfoRow}>
+          <DateTile iso={e.startsOn} size="lg" />
+          <View style={{ flex: 1, gap: spacing.xs }}>
+            <Text style={styles.heroDateLabel}>{dateRangeLabel}</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+              {e.category ? (
+                <View style={styles.heroCategoryChip}>
+                  <Icon name={cat.icon} size={12} color={colors.white} />
+                  <Text style={styles.heroCategoryText}>{e.category}</Text>
+                </View>
+              ) : null}
+              {status ? <StatusPill label={status.label} tone={status.tone} /> : null}
+            </View>
+          </View>
+        </View>
       </Hero>
       <View style={{ padding: spacing.lg, gap: spacing.lg }}>
-      <Card>
+      <Card style={{ gap: spacing.md }}>
+        <SectionHeader icon="information-circle-outline" label="DETAILS" />
         {e.description ? <Text style={{ ...typography.body, color: semantic.textPrimary }}>{e.description}</Text> : null}
         {e.location ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
@@ -190,7 +242,38 @@ export function EventDetailScreen() {
             <Text style={{ ...typography.caption, color: semantic.textSecondary }}>{e.location}</Text>
           </View>
         ) : null}
-        {e.responsibleName ? <Text style={{ ...typography.caption, color: semantic.textSecondary }}>Responsible: {e.responsibleName}</Text> : null}
+        {!e.description && !e.location ? (
+          <Text style={{ ...typography.caption, color: semantic.textSecondary }}>No description or location added.</Text>
+        ) : null}
+      </Card>
+
+      {e.responsible.length > 0 ? (
+        <Card style={{ gap: spacing.md }}>
+          <SectionHeader icon="people-outline" label="RESPONSIBLE STAFF" />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+            {e.responsible.map((r) => (
+              <View key={r.id} style={styles.staffChip}>
+                <Avatar name={r.fullName} size={22} />
+                <Text style={styles.staffChipText}>{r.fullName}</Text>
+              </View>
+            ))}
+          </View>
+        </Card>
+      ) : null}
+
+      <Card style={{ gap: spacing.md }}>
+        <SectionHeader icon="notifications-outline" label="REMINDERS" />
+        {e.reminderDays.length > 0 ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs }}>
+            {[...e.reminderDays]
+              .sort((a, b) => b - a)
+              .map((d) => (
+                <StatusPill key={d} label={d === 0 ? 'Same day' : d === 1 ? '1 day before' : `${d} days before`} tone="info" />
+              ))}
+          </View>
+        ) : (
+          <Text style={{ ...typography.caption, color: semantic.textSecondary }}>No reminders set for this event.</Text>
+        )}
       </Card>
 
       {e.completedAt ? (
@@ -212,28 +295,47 @@ export function EventDetailScreen() {
         </View>
       ) : null}
 
-      {isPrincipal ? (
+      {e.hasDiaryEntry && !e.completedAt ? (
+        // The Completed card above already says this for a completed event —
+        // this covers the other way a diary entry can exist: added manually
+        // without ever marking the event completed.
+        <StatusPill label="Added to diary" tone="info" />
+      ) : isPrincipal ? (
         addingToDiary ? (
           <Card>
             <TextField label="Diary note" value={note} onChangeText={setNote} multiline />
             <Button label="Save to diary" onPress={() => void saveDiary()} loading={saving} />
           </Card>
         ) : (
-          <Button label="Add to diary" variant="outline" onPress={() => setAddingToDiary(true)} />
+          <Button label="Add to diary" variant="outline" icon="book-outline" onPress={() => setAddingToDiary(true)} />
         )
-      ) : null}
-
-      {isPrincipal ? (
-        <View style={{ gap: spacing.xs }}>
-          <Button label="Delete event" icon="trash-outline" variant="danger" onPress={confirmDelete} loading={deleting} disabled={!canDelete} />
-          {!canDelete ? (
-            <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
-              Already saved to the diary — completed events cannot be deleted.
-            </Text>
-          ) : null}
-        </View>
       ) : null}
       </View>
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  heroInfoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  heroDateLabel: { ...typography.bodyStrong, color: colors.white },
+  heroCategoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+  },
+  heroCategoryText: { ...typography.caption, fontSize: 11, fontWeight: '600', color: colors.white },
+  staffChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: semantic.primaryMuted,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  staffChipText: { ...typography.captionStrong, color: semantic.primary },
+});

@@ -57,6 +57,17 @@ export async function listAccounts(): Promise<AccountRow[]> {
   }));
 }
 
+/** Maps the unique-constraint violation a duplicate staff_no/email/phone trips (staff_staff_no_key,
+ * staff_email_unique_idx, staff_phone_unique_idx — see 20260914060000_staff_email_phone_unique.sql)
+ * to a message naming the field, instead of surfacing the raw Postgres "duplicate key" text. Falls
+ * through to the original message for anything else (permission errors, etc). */
+function describeStaffWriteError(error: { message: string }): string {
+  if (error.message.includes('staff_staff_no_key')) return 'That staff number is already in use by another staff member.';
+  if (error.message.includes('staff_email_unique_idx')) return 'That email address is already in use by another staff member.';
+  if (error.message.includes('staff_phone_unique_idx')) return 'That phone number is already in use by another staff member.';
+  return error.message;
+}
+
 export async function createStaffAccount(input: {
   staffNo: string;
   fullName: string;
@@ -79,7 +90,7 @@ export async function createStaffAccount(input: {
     })
     .select('id')
     .single();
-  if (error) throw error;
+  if (error) throw new Error(describeStaffWriteError(error));
   return data.id;
 }
 
@@ -99,7 +110,7 @@ export async function updateStaffAccount(
       joined_on: input.joinedOn || null,
     })
     .eq('id', staffId);
-  if (error) throw error;
+  if (error) throw new Error(describeStaffWriteError(error));
 }
 
 export async function setStaffStatus(staffId: string, status: 'active' | 'inactive'): Promise<void> {
@@ -149,6 +160,21 @@ export async function listRoles(): Promise<RoleOption[]> {
   const { data, error } = await supabase.from('roles').select('id, key, name').order('name');
   if (error) throw error;
   return data ?? [];
+}
+
+/** Display order for the Grant role picker — seniority order, not alphabetical (see 001_roles.sql). */
+export const ROLE_ORDER = ['principal', 'vice_principal', 'administrator', 'sectional_head', 'class_teacher', 'staff'];
+
+export function sortRoleOptions(roles: RoleOption[]): RoleOption[] {
+  return [...roles].sort((a, b) => ROLE_ORDER.indexOf(a.key) - ROLE_ORDER.indexOf(b.key));
+}
+
+/** Sectional heads apply to one grade and class teachers to one class; every other role (principal,
+ * vice_principal, administrator, staff) is school-wide only — there's nothing to pick. */
+export function roleScopeType(roleKey: string | undefined): 'school' | 'grade' | 'class' {
+  if (roleKey === 'sectional_head') return 'grade';
+  if (roleKey === 'class_teacher') return 'class';
+  return 'school';
 }
 
 /** The signed-in staff member's own active role keys (e.g. 'principal') — read_staff_roles lets every staff row see its own rows regardless of account.manage. */

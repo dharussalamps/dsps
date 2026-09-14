@@ -3,15 +3,26 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { Button, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, TextField } from '@/components';
+import { Button, Card, DateField, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, TextField } from '@/components';
 import { useClasses } from '@/features/students/hooks';
 import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/store/authStore';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, elevation, minTapTarget, radius, semantic, spacing, typography } from '@/theme/tokens';
-import { parseDMY } from '@/lib/date';
-import { assignRole, createStaffAccount, createStaffLogin, revokeRole, setStaffStatus, updateStaffAccount, type AccountRow } from './api';
+import { formatDMYInput, parseDMY, toDMY } from '@/lib/date';
+import { isValidEmail } from '@/lib/validate';
+import {
+  assignRole,
+  createStaffAccount,
+  createStaffLogin,
+  revokeRole,
+  roleScopeType,
+  setStaffStatus,
+  sortRoleOptions,
+  updateStaffAccount,
+  type AccountRow,
+} from './api';
 import { AccountCard, confirmRevoke } from './AccountCard';
 import { useAccounts, useRoles } from './hooks';
 import { ImportStaffSection } from './ImportStaffSection';
@@ -69,6 +80,10 @@ export function UserAccountsScreen() {
 
   async function submitCreate() {
     if (!staffNo.trim() || !fullName.trim() || !phone.trim()) return;
+    if (email.trim() && !isValidEmail(email)) {
+      Alert.alert('Invalid email', 'Enter a valid email address.');
+      return;
+    }
     const isoBirthDate = birthDate.trim() ? parseDMY(birthDate) : undefined;
     if (birthDate.trim() && !isoBirthDate) {
       Alert.alert('Invalid birth date', 'Enter birth date as DD/MM/YYYY.');
@@ -79,6 +94,27 @@ export function UserAccountsScreen() {
       Alert.alert('Invalid joined date', 'Enter the joined date as DD/MM/YYYY.');
       return;
     }
+
+    // Instant feedback against what's already loaded — the DB's unique indexes
+    // (20260914060000_staff_email_phone_unique.sql) are the real backstop for a race
+    // between two admins, but there's no reason to wait on a round trip for the common case.
+    const staffNoNorm = staffNo.trim().toLowerCase();
+    const phoneNorm = phone.trim();
+    const emailNorm = email.trim().toLowerCase();
+    const existing = accounts.data ?? [];
+    if (existing.some((a) => a.staffNo.trim().toLowerCase() === staffNoNorm)) {
+      Alert.alert('Staff number already in use', 'Another staff member already has this staff number.');
+      return;
+    }
+    if (existing.some((a) => a.phone.trim() === phoneNorm)) {
+      Alert.alert('Phone number already in use', 'Another staff member already has this phone number.');
+      return;
+    }
+    if (emailNorm && existing.some((a) => (a.email ?? '').trim().toLowerCase() === emailNorm)) {
+      Alert.alert('Email already in use', 'Another staff member already has this email address.');
+      return;
+    }
+
     setSaving(true);
     try {
       await createStaffAccount({
@@ -99,6 +135,8 @@ export function UserAccountsScreen() {
       setBirthDate('');
       setJoinedOn('');
       await invalidate();
+    } catch (err) {
+      Alert.alert('Could not create staff account', err instanceof Error ? err.message : 'Please try again.');
     } finally {
       setSaving(false);
     }
@@ -159,6 +197,9 @@ export function UserAccountsScreen() {
     ? (accounts.data ?? []).filter((a) => a.fullName.toLowerCase().includes(term) || a.staffNo.toLowerCase().includes(term))
     : accounts.data ?? [];
 
+  const emailError = creating && email.trim() && !isValidEmail(email) ? 'Enter a valid email address.' : undefined;
+  const today = new Date().toISOString().slice(0, 10);
+
   return (
     <Screen scroll={false} padded={false} edges={['left', 'right']}>
       <Hero style={{ overflow: 'hidden' }}>
@@ -204,40 +245,60 @@ export function UserAccountsScreen() {
         ) : null}
       </View>
 
-      {creating || showImport ? (
-        <View style={{ padding: spacing.lg, paddingBottom: 0, gap: spacing.md }}>
-          {creating ? (
-            <Card>
-              <TextField label="Staff number" value={staffNo} onChangeText={setStaffNo} autoCapitalize="none" />
-              <TextField label="Full name" value={fullName} onChangeText={setFullName} />
-              <TextField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-              <TextField
-                label="Email"
-                hint="Needed to create their login later"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-              <TextField label="Address (optional)" value={address} onChangeText={setAddress} multiline />
-              <TextField label="Birth date (optional)" placeholder="DD/MM/YYYY" value={birthDate} onChangeText={setBirthDate} />
-              <TextField label="Joined date (optional)" placeholder="DD/MM/YYYY" value={joinedOn} onChangeText={setJoinedOn} />
-              <Button label="Save" onPress={() => void submitCreate()} loading={saving} />
-            </Card>
-          ) : null}
-          {showImport ? <ImportStaffSection onDirtyChange={setImportDirty} /> : null}
-        </View>
-      ) : null}
-
-      {accounts.isLoading ? (
-        <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
-      ) : (
-        <FlatList
-          data={filteredAccounts}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm, paddingBottom: spacing.xl }}
-          ListEmptyComponent={<EmptyState title={term ? 'No staff match your search' : 'No staff accounts'} />}
-          renderItem={({ item }) => (
+      <FlatList
+        data={filteredAccounts}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={{ padding: spacing.lg, paddingTop: spacing.sm, gap: spacing.sm, paddingBottom: spacing.xl }}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          creating || showImport ? (
+            <View style={{ gap: spacing.md, marginBottom: spacing.sm }}>
+              {creating ? (
+                <Card>
+                  <TextField label="Staff number" value={staffNo} onChangeText={setStaffNo} autoCapitalize="none" />
+                  <TextField label="Full name" value={fullName} onChangeText={setFullName} />
+                  <TextField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+                  <TextField
+                    label="Email"
+                    hint={emailError ? undefined : 'Needed to create their login later'}
+                    error={emailError}
+                    value={email}
+                    onChangeText={setEmail}
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                  />
+                  <TextField label="Address (optional)" value={address} onChangeText={setAddress} multiline />
+                  <DateField
+                    label="Birth date (optional)"
+                    value={birthDate}
+                    onChangeText={(t) => setBirthDate(formatDMYInput(t))}
+                    onPickIso={(iso) => setBirthDate(toDMY(iso))}
+                    maxDate={today}
+                    mode="yearFirst"
+                  />
+                  <DateField
+                    label="Joined date (optional)"
+                    value={joinedOn}
+                    onChangeText={(t) => setJoinedOn(formatDMYInput(t))}
+                    onPickIso={(iso) => setJoinedOn(toDMY(iso))}
+                    maxDate={today}
+                    mode="yearFirst"
+                  />
+                  <Button label="Save" onPress={() => void submitCreate()} loading={saving} />
+                </Card>
+              ) : null}
+              {showImport ? <ImportStaffSection onDirtyChange={setImportDirty} /> : null}
+            </View>
+          ) : null
+        }
+        ListEmptyComponent={
+          accounts.isLoading ? (
+            <ActivityIndicator color={semantic.primary} style={{ marginTop: spacing.xl }} />
+          ) : (
+            <EmptyState title={term ? 'No staff match your search' : 'No staff accounts'} />
+          )
+        }
+        renderItem={({ item }) => (
             <AccountCard
               account={item}
               isAssigning={assigningFor === item.id}
@@ -246,14 +307,15 @@ export function UserAccountsScreen() {
                 setRoleId(null);
                 setScopeId(null);
               }}
-              roles={roles.data ?? []}
+              roles={sortRoleOptions(roles.data ?? [])}
               roleId={roleId}
-              onSelectRole={setRoleId}
-              scopeType={scopeType}
-              onSelectScope={(st) => {
-                setScopeType(st);
+              onSelectRole={(id) => {
+                setRoleId(id);
+                const role = (roles.data ?? []).find((r) => r.id === id);
+                setScopeType(roleScopeType(role?.key));
                 setScopeId(null);
               }}
+              scopeType={scopeType}
               scopeId={scopeId}
               onSelectScopeId={setScopeId}
               grades={grades.data ?? []}
@@ -277,7 +339,6 @@ export function UserAccountsScreen() {
             />
           )}
         />
-      )}
     </Screen>
   );
 }

@@ -40,7 +40,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#FBF8F3"
         }
-      ]
+      ],
+      "expo-sharing"
     ]
   }
 }

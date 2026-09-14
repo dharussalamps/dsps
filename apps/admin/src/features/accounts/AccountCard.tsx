@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Avatar, Button, Card, Icon, StatusPill, TextField } from '@/components';
-import { parseDMY, toDMY } from '@/lib/date';
+import { Avatar, Button, Card, DateField, Icon, StatusPill, TextField } from '@/components';
+import { formatDMYInput, parseDMY, toDMY } from '@/lib/date';
+import { isValidEmail } from '@/lib/validate';
 import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
 import type { AccountRow, RoleOption } from './api';
 
@@ -22,7 +23,6 @@ type Props = {
   roleId: string | null;
   onSelectRole: (id: string) => void;
   scopeType: ScopeType;
-  onSelectScope: (s: ScopeType) => void;
   scopeId: string | null;
   onSelectScopeId: (id: string) => void;
   grades: { id: string; name: string }[];
@@ -54,7 +54,6 @@ export function AccountCard({
   roleId,
   onSelectRole,
   scopeType,
-  onSelectScope,
   scopeId,
   onSelectScopeId,
   grades,
@@ -107,8 +106,15 @@ export function AccountCard({
     setIsEditing(true);
   }
 
+  const emailError = isEditing && email.trim() && !isValidEmail(email) ? 'Enter a valid email address.' : undefined;
+  const today = new Date().toISOString().slice(0, 10);
+
   async function saveEdit() {
     if (!staffNo.trim() || !fullName.trim() || !phone.trim()) return;
+    if (email.trim() && !isValidEmail(email)) {
+      Alert.alert('Invalid email', 'Enter a valid email address.');
+      return;
+    }
     const isoBirthDate = birthDate.trim() ? parseDMY(birthDate) : undefined;
     if (birthDate.trim() && !isoBirthDate) {
       Alert.alert('Invalid birth date', 'Enter birth date as DD/MM/YYYY.');
@@ -178,7 +184,7 @@ export function AccountCard({
                 size="sm"
                 variant="outline"
                 loading={isCreatingLogin}
-                onPress={onCreateLogin}
+                onPress={() => confirmCreateLogin(account.fullName, account.email!, onCreateLogin)}
                 style={styles.createLoginButton}
               />
             ) : (
@@ -216,10 +222,31 @@ export function AccountCard({
           <TextField label="Staff number" value={staffNo} onChangeText={setStaffNo} autoCapitalize="none" />
           <TextField label="Full name" value={fullName} onChangeText={setFullName} />
           <TextField label="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-          <TextField label="Email (optional)" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+          <TextField
+            label="Email (optional)"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            error={emailError}
+          />
           <TextField label="Address (optional)" value={address} onChangeText={setAddress} multiline />
-          <TextField label="Birth date (optional)" placeholder="DD/MM/YYYY" value={birthDate} onChangeText={setBirthDate} />
-          <TextField label="Joined date (optional)" placeholder="DD/MM/YYYY" value={joinedOn} onChangeText={setJoinedOn} />
+          <DateField
+            label="Birth date (optional)"
+            value={birthDate}
+            onChangeText={(t) => setBirthDate(formatDMYInput(t))}
+            onPickIso={(iso) => setBirthDate(toDMY(iso))}
+            maxDate={today}
+            mode="yearFirst"
+          />
+          <DateField
+            label="Joined date (optional)"
+            value={joinedOn}
+            onChangeText={(t) => setJoinedOn(formatDMYInput(t))}
+            onPickIso={(iso) => setJoinedOn(toDMY(iso))}
+            maxDate={today}
+            mode="yearFirst"
+          />
           <View style={styles.chipRow}>
             <Button label="Save changes" icon="checkmark" size="sm" onPress={() => void saveEdit()} loading={editSaving} style={{ flex: 1 }} />
             <Button label="Cancel" size="sm" variant="ghost" onPress={() => setIsEditing(false)} />
@@ -234,23 +261,26 @@ export function AccountCard({
             <Text style={{ ...typography.caption, color: colors.warning }}>No role assigned yet</Text>
           </View>
         ) : (
-          account.roles.map((r) => (
-            <View key={r.staffRoleId} style={styles.roleChip}>
-              <Icon name="shield-checkmark-outline" size={13} color={colors.gold900} />
-              <Text style={styles.roleChipLabel}>
-                {r.roleName} · {r.scopeType}
-              </Text>
-              <Button
-                label=""
-                accessibilityLabel={`Revoke ${r.roleName} (${r.scopeType})`}
-                icon="close"
-                size="sm"
-                variant="ghost"
-                style={styles.roleChipRemove}
-                onPress={() => onRevokeRole(r.staffRoleId, r.roleName, r.scopeType)}
-              />
-            </View>
-          ))
+          account.roles.map((r) => {
+            const scope = scopeLabel(r.scopeType, r.scopeId, grades, classes);
+            return (
+              <View key={r.staffRoleId} style={styles.roleChip}>
+                <Icon name="shield-checkmark-outline" size={13} color={colors.gold900} />
+                <Text style={styles.roleChipLabel}>
+                  {r.roleName} · {scope}
+                </Text>
+                <Button
+                  label=""
+                  accessibilityLabel={`Revoke ${r.roleName} (${scope})`}
+                  icon="close"
+                  size="sm"
+                  variant="ghost"
+                  style={styles.roleChipRemove}
+                  onPress={() => onRevokeRole(r.staffRoleId, r.roleName, scope)}
+                />
+              </View>
+            );
+          })
         )}
       </View>
 
@@ -271,7 +301,7 @@ export function AccountCard({
           size="sm"
           variant="ghost"
           textColor={isActive ? colors.error : colors.teal700}
-          onPress={onToggleStatus}
+          onPress={() => confirmToggleStatus(account.fullName, isActive, onToggleStatus)}
           style={{ flex: 1 }}
         />
       </View>
@@ -290,40 +320,77 @@ export function AccountCard({
             ))}
           </View>
 
-          <Text style={styles.sectionLabel}>APPLIES TO</Text>
-          <View style={styles.chipRow}>
-            {(Object.keys(scopeMeta) as ScopeType[]).map((st) => (
-              <Button
-                key={st}
-                label={scopeMeta[st].label}
-                icon={scopeMeta[st].icon}
-                size="sm"
-                variant={scopeType === st ? 'primary' : 'outline'}
-                onPress={() => onSelectScope(st)}
-              />
-            ))}
-          </View>
-
-          {scopeType === 'grade' ? (
-            <View style={styles.chipRow}>
-              {grades.map((g) => (
-                <Button key={g.id} label={g.name} size="sm" variant={scopeId === g.id ? 'primary' : 'outline'} onPress={() => onSelectScopeId(g.id)} />
-              ))}
-            </View>
+          {roleId ? (
+            scopeType === 'grade' ? (
+              <>
+                <Text style={styles.sectionLabel}>APPLIES TO — GRADE</Text>
+                <View style={styles.chipRow}>
+                  {grades.map((g) => (
+                    <Button
+                      key={g.id}
+                      label={g.name}
+                      size="sm"
+                      variant={scopeId === g.id ? 'primary' : 'outline'}
+                      onPress={() => onSelectScopeId(g.id)}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : scopeType === 'class' ? (
+              <>
+                <Text style={styles.sectionLabel}>APPLIES TO — CLASS</Text>
+                <View style={styles.chipRow}>
+                  {classes.map((c) => (
+                    <Button
+                      key={c.id}
+                      label={c.name}
+                      size="sm"
+                      variant={scopeId === c.id ? 'primary' : 'outline'}
+                      onPress={() => onSelectScopeId(c.id)}
+                    />
+                  ))}
+                </View>
+              </>
+            ) : (
+              <View style={styles.schoolScopeNote}>
+                <Icon name={scopeMeta.school.icon} size={14} color={semantic.textSecondary} />
+                <Text style={{ ...typography.caption, color: semantic.textSecondary }}>Applies to the whole school</Text>
+              </View>
+            )
           ) : null}
-          {scopeType === 'class' ? (
-            <View style={styles.chipRow}>
-              {classes.map((c) => (
-                <Button key={c.id} label={c.name} size="sm" variant={scopeId === c.id ? 'primary' : 'outline'} onPress={() => onSelectScopeId(c.id)} />
-              ))}
-            </View>
-          ) : null}
 
-          <Button label="Grant role" icon="checkmark" onPress={onGrant} loading={saving} />
+          <Button
+            label="Grant role"
+            icon="checkmark"
+            onPress={() => {
+              if (!roleId) return;
+              if ((scopeType === 'grade' || scopeType === 'class') && !scopeId) {
+                Alert.alert(`Select a ${scopeType}`, `Choose which ${scopeType} this role applies to.`);
+                return;
+              }
+              confirmGrantRole(account.fullName, roles.find((r) => r.id === roleId)?.name ?? 'this role', scopeMeta[scopeType].label, onGrant);
+            }}
+            loading={saving}
+          />
         </View>
       ) : null}
     </Card>
   );
+}
+
+/** Resolves a role assignment's scope into a display label — the grade/class name it's pinned
+ * to, rather than the raw 'grade'/'class' scope_type — so the role pill shows *which* grade or
+ * class, not just that it's grade- or class-scoped. */
+function scopeLabel(
+  scopeType: string,
+  scopeId: string | null,
+  grades: { id: string; name: string }[],
+  classes: { id: string; name: string }[],
+): string {
+  if (scopeType === 'grade') return grades.find((g) => g.id === scopeId)?.name ?? 'a grade';
+  if (scopeType === 'class') return classes.find((c) => c.id === scopeId)?.name ?? 'a class';
+  if (scopeType === 'self') return 'just them';
+  return 'whole school';
 }
 
 export function confirmRevoke(fullName: string, roleName: string, scopeType: string, onConfirm: () => void) {
@@ -344,6 +411,28 @@ function confirmResendLogin(fullName: string, onConfirm: () => void) {
   );
 }
 
+function confirmCreateLogin(fullName: string, email: string, onConfirm: () => void) {
+  Alert.alert('Create a login?', `A temporary password will be created and emailed to ${fullName} at ${email}.`, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Create login', onPress: onConfirm },
+  ]);
+}
+
+function confirmToggleStatus(fullName: string, isActive: boolean, onConfirm: () => void) {
+  Alert.alert(
+    isActive ? 'Deactivate this account?' : 'Reactivate this account?',
+    isActive ? `${fullName} will lose access to the app immediately.` : `${fullName} will regain access to the app.`,
+    [{ text: 'Cancel', style: 'cancel' }, { text: isActive ? 'Deactivate' : 'Reactivate', style: isActive ? 'destructive' : 'default', onPress: onConfirm }],
+  );
+}
+
+function confirmGrantRole(fullName: string, roleName: string, scopeLabel: string, onConfirm: () => void) {
+  Alert.alert('Grant this role?', `${roleName} (${scopeLabel}) will be assigned to ${fullName}.`, [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Grant role', onPress: onConfirm },
+  ]);
+}
+
 const styles = StyleSheet.create({
   card: { padding: 0, overflow: 'hidden' },
   accentBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
@@ -351,7 +440,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
     paddingLeft: spacing.lg + 4,
   },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -365,7 +456,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: semantic.surfaceAlt,
   },
-  createLoginButton: { alignSelf: 'flex-start', marginTop: spacing.xs, minHeight: 30, paddingHorizontal: spacing.sm },
+  createLoginButton: { alignSelf: 'flex-start', marginTop: 2, minHeight: 30, paddingHorizontal: spacing.sm },
   dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: semantic.textSecondary },
   rolesWrap: {
     flexDirection: 'row',
@@ -406,6 +497,7 @@ const styles = StyleSheet.create({
     backgroundColor: semantic.surfaceAlt,
   },
   assignPanelHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
+  schoolScopeNote: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   sectionLabel: { ...typography.overline, color: semantic.textSecondary },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
 });

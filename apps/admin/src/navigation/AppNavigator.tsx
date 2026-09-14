@@ -1,5 +1,6 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AcademicStructureScreen } from '@/features/academicStructure/AcademicStructureScreen';
+import { AnnouncementsScreen } from '@/features/announcements/AnnouncementsScreen';
 import { ComposeAnnouncementScreen } from '@/features/announcements/ComposeAnnouncementScreen';
 import { NotificationsScreen } from '@/features/notifications/NotificationsScreen';
 import { AssignCoverScreen } from '@/features/leave/AssignCoverScreen';
@@ -79,6 +80,7 @@ export function AppNavigator() {
       <Stack.Screen name="LeaveRequestDetail" component={LeaveRequestDetailScreen} />
       <Stack.Screen name="LeaveAllocation" component={LeaveAllocationScreen} />
 
+      <Stack.Screen name="Announcements" component={AnnouncementsScreen} />
       <Stack.Screen name="ComposeAnnouncement" component={ComposeAnnouncementScreen} />
 
       <Stack.Screen name="Inventory" component={InventoryScreen} />

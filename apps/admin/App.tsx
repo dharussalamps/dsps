@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { initAttendanceOffline } from '@/features/attendance/init';
 import { useSyncEngine } from '@/lib/offline';
+import { usePushNotificationRegistration } from '@/lib/pushNotifications';
 import { queryClient } from '@/lib/queryClient';
 import { useSessionLiveness } from '@/store/authStore';
 import { RootNavigator } from '@/navigation/RootNavigator';
@@ -29,6 +30,7 @@ const navigationTheme: Theme = {
 export default function App() {
   useSyncEngine();
   useSessionLiveness();
+  usePushNotificationRegistration();
   useEffect(() => {
     void initAttendanceOffline();
   }, []);

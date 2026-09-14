@@ -1,6 +1,6 @@
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useEffect, useState } from 'react';
-import { Animated, Pressable, StyleSheet } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '@/components/Icon';
 import { colors, radius, semantic, spacing } from '@/theme/tokens';
@@ -19,11 +19,13 @@ function TabButton({
   focused,
   label,
   icon,
+  badge,
   onPress,
 }: {
   focused: boolean;
   label: string;
   icon: { outline: IconName; filled: IconName };
+  badge?: number | string;
   onPress: () => void;
 }) {
   const [anim] = useState(() => new Animated.Value(focused ? 1 : 0));
@@ -53,6 +55,13 @@ function TabButton({
       <Animated.View style={[styles.iconSlot, { transform: [{ translateY: lift }] }]}>
         <Animated.View style={[styles.bubble, { opacity: anim, transform: [{ scale: bubbleScale }] }]} />
         <Icon name={focused ? icon.filled : icon.outline} size={18} color={focused ? colors.white : colors.ink300} />
+        {badge != null && badge !== 0 && badge !== '' ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeLabel} numberOfLines={1}>
+              {typeof badge === 'number' && badge > 99 ? '99+' : String(badge)}
+            </Text>
+          </View>
+        ) : null}
       </Animated.View>
       <Animated.Text
         style={[styles.label, focused && styles.labelFocused, { opacity: labelOpacity }]}
@@ -88,7 +97,16 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           }
         };
 
-        return <TabButton key={route.key} focused={focused} label={label} icon={icon} onPress={onPress} />;
+        return (
+          <TabButton
+            key={route.key}
+            focused={focused}
+            label={label}
+            icon={icon}
+            badge={options.tabBarBadge}
+            onPress={onPress}
+          />
+        );
       })}
     </Animated.View>
   );
@@ -126,4 +144,19 @@ const styles = StyleSheet.create({
   },
   label: { fontSize: 11, fontWeight: '600', color: colors.ink300 },
   labelFocused: { color: semantic.primary, fontWeight: '700' },
+  badge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: radius.pill,
+    paddingHorizontal: 3,
+    backgroundColor: colors.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: semantic.surface,
+  },
+  badgeLabel: { fontSize: 9, fontWeight: '700', color: colors.white },
 });

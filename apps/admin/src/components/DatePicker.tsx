@@ -287,13 +287,19 @@ type DateFieldProps = {
   /** YYYY-MM-DD, from picking a day in the calendar. */
   onPickIso: (iso: string) => void;
   minDate?: string;
+  /** YYYY-MM-DD — dates after this are shown but not selectable. */
+  maxDate?: string;
   dayTone?: (isoDate: string) => 'school' | 'off' | undefined;
   blockOffDays?: boolean;
   error?: string;
+  /** 'nav' (default) steps month by month — fine for a date near today. 'yearFirst' opens on a
+   * year grid first — pass this for a date that's commonly decades back, like a birthdate or a
+   * staff join date, where stepping month by month would take dozens of taps. */
+  mode?: 'nav' | 'yearFirst';
 };
 
 /** A typed DD/MM/YYYY field (auto-slashed as digits are entered — see formatDMYInput) paired with a calendar-icon button that opens CalendarModal for visual picking, with school days vs non-school days marked when dayTone is given. */
-export function DateField({ label, value, onChangeText, onPickIso, minDate, dayTone, blockOffDays, error }: DateFieldProps) {
+export function DateField({ label, value, onChangeText, onPickIso, minDate, maxDate, dayTone, blockOffDays, error, mode }: DateFieldProps) {
   const [open, setOpen] = useState(false);
   const iso = parseDMY(value) ?? undefined;
 
@@ -307,7 +313,17 @@ export function DateField({ label, value, onChangeText, onPickIso, minDate, dayT
           <Icon name="calendar-outline" size={18} color={semantic.primary} />
         </Pressable>
       </View>
-      <CalendarModal visible={open} value={iso} onChange={onPickIso} onClose={() => setOpen(false)} minDate={minDate} dayTone={dayTone} blockOffDays={blockOffDays} />
+      <CalendarModal
+        visible={open}
+        value={iso}
+        onChange={onPickIso}
+        onClose={() => setOpen(false)}
+        minDate={minDate}
+        maxDate={maxDate}
+        dayTone={dayTone}
+        blockOffDays={blockOffDays}
+        mode={mode}
+      />
     </View>
   );
 }

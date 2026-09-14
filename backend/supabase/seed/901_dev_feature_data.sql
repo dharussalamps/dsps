@@ -213,17 +213,29 @@ on conflict do nothing;
 -- ---------------------------------------------------------------------
 -- Events + diary.
 -- ---------------------------------------------------------------------
-insert into events (title, description, category, starts_on, ends_on, location, responsible_id, academic_year_id, created_by)
-select 'Sports Day', 'Annual inter-house sports meet.', 'sports', '2026-09-25', '2026-09-25', 'School Grounds', (select id from staff where staff_no = 'V001'), (select id from academic_years where is_current), (select id from staff where staff_no = 'P001')
+insert into events (title, description, category, starts_on, ends_on, location, academic_year_id, created_by)
+select 'Sports Day', 'Annual inter-house sports meet.', 'sports', '2026-09-25', '2026-09-25', 'School Grounds', (select id from academic_years where is_current), (select id from staff where staff_no = 'P001')
 where not exists (select 1 from events where title = 'Sports Day' and starts_on = '2026-09-25');
 
-insert into events (title, description, category, starts_on, ends_on, location, responsible_id, academic_year_id, created_by)
-select 'Term 3 Examinations', 'End-of-term written examinations for all grades.', 'exam', '2026-10-09', '2026-10-16', 'Classrooms', (select id from staff where staff_no = 'S001'), (select id from academic_years where is_current), (select id from staff where staff_no = 'P001')
+insert into events (title, description, category, starts_on, ends_on, location, academic_year_id, created_by)
+select 'Term 3 Examinations', 'End-of-term written examinations for all grades.', 'exam', '2026-10-09', '2026-10-16', 'Classrooms', (select id from academic_years where is_current), (select id from staff where staff_no = 'P001')
 where not exists (select 1 from events where title = 'Term 3 Examinations' and starts_on = '2026-10-09');
 
-insert into events (title, description, category, starts_on, ends_on, location, responsible_id, academic_year_id, created_by)
-select 'Independence Day Assembly', 'Special assembly with flag hoisting and cultural items.', 'assembly', '2026-08-04', '2026-08-04', 'Main Hall', (select id from staff where staff_no = 'A001'), (select id from academic_years where is_current), (select id from staff where staff_no = 'P001')
+insert into events (title, description, category, starts_on, ends_on, location, academic_year_id, created_by)
+select 'Independence Day Assembly', 'Special assembly with flag hoisting and cultural items.', 'assembly', '2026-08-04', '2026-08-04', 'Main Hall', (select id from academic_years where is_current), (select id from staff where staff_no = 'P001')
 where not exists (select 1 from events where title = 'Independence Day Assembly' and starts_on = '2026-08-04');
+
+insert into event_responsible_staff (event_id, staff_id)
+select e.id, s.id from events e, staff s where e.title = 'Sports Day' and s.staff_no = 'V001'
+on conflict do nothing;
+
+insert into event_responsible_staff (event_id, staff_id)
+select e.id, s.id from events e, staff s where e.title = 'Term 3 Examinations' and s.staff_no = 'S001'
+on conflict do nothing;
+
+insert into event_responsible_staff (event_id, staff_id)
+select e.id, s.id from events e, staff s where e.title = 'Independence Day Assembly' and s.staff_no = 'A001'
+on conflict do nothing;
 
 insert into diary_entries (on_date, title, body, event_id, author_id)
 select '2026-09-07', 'Sports Day practice began', 'House captains held the first practice session for track events after school.', (select id from events where title = 'Sports Day'), (select id from staff where staff_no = 'V001')
