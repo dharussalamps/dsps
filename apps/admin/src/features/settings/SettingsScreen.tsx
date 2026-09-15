@@ -2,8 +2,8 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Constants from 'expo-constants';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SectionHeader, type IconName } from '@/components';
+import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Button, Card, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SectionHeader, ToggleRow, type IconName } from '@/components';
 import { isBiometricAvailable, isBiometricUnlockEnabled, setBiometricUnlockEnabled } from '@/lib/biometrics';
 import { hasUnsyncedOperations } from '@/lib/offline';
 import type { RootStackParamList } from '@/navigation/types';
@@ -28,7 +28,9 @@ const adminItems: AdminItem[] = [
   { label: 'Leave allocation', route: 'LeaveAllocation', icon: 'calendar-outline', tint: tints.gold },
   { label: 'Set class', route: 'SetClass', icon: 'swap-horizontal-outline', tint: tints.teal },
   { label: 'Academic calendar', route: 'AcademicCalendar', icon: 'calendar-outline', tint: tints.info },
-  { label: 'Classes, subjects & terms', route: 'AcademicStructure', icon: 'layers-outline', tint: tints.maroon },
+  { label: 'Academic structure', route: 'AcademicStructure', icon: 'layers-outline', tint: tints.maroon },
+  { label: 'Promote students', route: 'PromoteStudents', icon: 'arrow-up-circle-outline', tint: tints.gold },
+  { label: 'Dashboard widgets', route: 'DashboardWidgets', icon: 'grid-outline', tint: tints.teal },
 ];
 
 /**
@@ -83,7 +85,10 @@ export function SettingsScreen() {
       );
       return;
     }
-    await doSignOut();
+    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => void doSignOut() },
+    ]);
   }
 
   async function doSignOut() {
@@ -108,7 +113,7 @@ export function SettingsScreen() {
         {biometricAvailable ? (
           <Card>
             <SectionHeader icon="finger-print-outline" label="SECURITY" />
-            <SettingsToggleRow
+            <ToggleRow
               icon="lock-closed-outline"
               label="Biometric unlock"
               description="Ask for Face ID / fingerprint when returning to the app after it's been backgrounded."
@@ -141,54 +146,6 @@ export function SettingsScreen() {
   );
 }
 
-function SettingsToggleRow({
-  icon,
-  label,
-  description,
-  value,
-  busy,
-  onToggle,
-}: {
-  icon: IconName;
-  label: string;
-  description?: string;
-  value: boolean;
-  busy?: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <View style={styles.row}>
-      <View style={styles.iconChip}>
-        <Icon name={icon} size={16} color={semantic.primary} />
-      </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ ...typography.bodyStrong, color: semantic.textPrimary }}>{label}</Text>
-        {description ? <Text style={styles.hint}>{description}</Text> : null}
-      </View>
-      {busy ? <ActivityIndicator color={semantic.primary} /> : <Toggle value={value} onValueChange={onToggle} />}
-    </View>
-  );
-}
-
-function Toggle({ value, onValueChange }: { value: boolean; onValueChange: () => void }) {
-  const [anim] = useState(() => new Animated.Value(value ? 1 : 0));
-
-  useEffect(() => {
-    Animated.timing(anim, { toValue: value ? 1 : 0, duration: 160, useNativeDriver: false }).start();
-  }, [value, anim]);
-
-  const trackColor = anim.interpolate({ inputRange: [0, 1], outputRange: [colors.cream200, semantic.primary] });
-  const thumbTranslate = anim.interpolate({ inputRange: [0, 1], outputRange: [2, 22] });
-
-  return (
-    <Pressable onPress={onValueChange} accessibilityRole="switch" accessibilityState={{ checked: value }} hitSlop={8}>
-      <Animated.View style={[styles.toggleTrack, { backgroundColor: trackColor }]}>
-        <Animated.View style={[styles.toggleThumb, { transform: [{ translateX: thumbTranslate }] }]} />
-      </Animated.View>
-    </Pressable>
-  );
-}
-
 function AdminRow({ item, onPress }: { item: AdminItem; onPress: () => void }) {
   return (
     <Card onPress={onPress} style={styles.adminRow}>
@@ -204,17 +161,7 @@ function AdminRow({ item, onPress }: { item: AdminItem; onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  hint: { ...typography.caption, color: semantic.textSecondary },
   version: { ...typography.caption, color: colors.ink300, textAlign: 'center', marginTop: -spacing.xs },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
-  iconChip: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.md,
-    backgroundColor: semantic.primaryMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   groupHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingLeft: spacing.xs },
   groupIconChip: {
     width: 22,
@@ -233,22 +180,5 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  toggleTrack: {
-    width: 48,
-    height: 28,
-    borderRadius: radius.pill,
-    justifyContent: 'center',
-  },
-  toggleThumb: {
-    width: 24,
-    height: 24,
-    borderRadius: radius.pill,
-    backgroundColor: colors.white,
-    shadowColor: colors.ink900,
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
   },
 });

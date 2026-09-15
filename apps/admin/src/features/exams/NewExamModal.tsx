@@ -4,6 +4,7 @@ import { Button, Icon, TextField } from '@/components';
 import { useTermsForYear } from '@/features/calendar/hooks';
 import { getOrCreateMarkSheet } from '@/features/marks/api';
 import { useSubjectsForClass } from '@/features/marks/hooks';
+import { isCurrentPeriod } from '@/lib/date';
 import { colors, elevation, radius, semantic, spacing, typography } from '@/theme/tokens';
 
 type Props = {
@@ -101,7 +102,7 @@ export function NewExamModal({ visible, classId, yearId, onClose, onCreated }: P
                 {(terms.data ?? []).map((t) => (
                   <Button
                     key={t.id}
-                    label={t.name}
+                    label={isCurrentPeriod(t.startsOn, t.endsOn) ? `${t.name} · current` : t.name}
                     size="sm"
                     variant="outline"
                     loading={creatingTermId === t.id}

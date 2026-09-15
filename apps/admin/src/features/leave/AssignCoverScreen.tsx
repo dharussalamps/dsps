@@ -22,6 +22,7 @@ import {
 } from '@/components';
 import { useClassesForCurrentYear } from '@/features/academicStructure/hooks';
 import { useAcademicYears, useCalendarDaysInRange, useCurrentYearTerms, useWorkingWeekdays } from '@/features/calendar/hooks';
+import { YearChip } from '@/features/calendar/YearChip';
 import { listStaff, type RoleResponsibility, type StaffSummary } from '@/features/staff/api';
 import { useResponsibilitiesForStaff, useRoleResponsibilitiesForStaff } from '@/features/staff/hooks';
 import { useConfirmDiscardOnLeave } from '@/hooks/useConfirmDiscardOnLeave';
@@ -267,21 +268,9 @@ export function AssignCoverScreen() {
         />
         {tab === 'assigned' && academicYears.data && academicYears.data.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-            {academicYears.data.map((y) => {
-              const active = y.id === listYearId;
-              return (
-                <Pressable
-                  key={y.id}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  onPress={() => setPickedListYearId(y.id)}
-                  style={[heroStyles.chip, active && heroStyles.chipActive]}
-                >
-                  <Icon name="calendar-outline" size={14} color={active ? semantic.primary : colors.white} />
-                  <Text style={[heroStyles.chipLabel, active && heroStyles.chipLabelActive]}>{y.label}</Text>
-                </Pressable>
-              );
-            })}
+            {academicYears.data.map((y) => (
+              <YearChip key={y.id} year={y} active={y.id === listYearId} onPress={() => setPickedListYearId(y.id)} />
+            ))}
           </ScrollView>
         ) : null}
       </Hero>
@@ -506,21 +495,6 @@ export function AssignCoverScreen() {
     </Screen>
   );
 }
-
-const heroStyles = StyleSheet.create({
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  chipActive: { backgroundColor: colors.white },
-  chipLabel: { ...typography.captionStrong, color: colors.white },
-  chipLabelActive: { color: semantic.primary },
-});
 
 const styles = StyleSheet.create({
   classInfoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.xs },

@@ -1,10 +1,11 @@
 import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Avatar, Button, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SectionHeader, SegmentedControl, StatusPill } from '@/components';
 import type { PillTone } from '@/components';
 import { useAcademicYears, useTermsForYear } from '@/features/calendar/hooks';
+import { YearChip } from '@/features/calendar/YearChip';
 import { colors, elevation, radius, semantic, spacing, typography } from '@/theme/tokens';
 import { exportAttendanceSummary, exportMarksSummary, fetchStudentsAtRisk } from './api';
 import { useCurrentTermId, useGradeNames, useSummaries } from './hooks';
@@ -88,27 +89,19 @@ export function AnalyticsScreen() {
   const yearPicker =
     years.data && years.data.length > 0 ? (
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-        {years.data.map((y) => {
-          const active = y.id === yearId;
-          return (
-            <Pressable
-              key={y.id}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              onPress={() => pickYear(y.id)}
-              style={[styles.chip, active && styles.chipActive]}
-            >
-              <Icon name="calendar-outline" size={14} color={active ? semantic.primary : colors.white} />
-              <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{y.label}</Text>
-            </Pressable>
-          );
-        })}
+        {years.data.map((y) => (
+          <YearChip key={y.id} year={y} active={y.id === yearId} onPress={() => pickYear(y.id)} />
+        ))}
       </ScrollView>
     ) : null;
 
   const termPicker =
     terms.data && terms.data.length > 0 && termId ? (
-      <SegmentedControl value={termId} onChange={setPickedTermId} options={terms.data.map((t) => ({ key: t.id, label: t.name }))} />
+      <SegmentedControl
+        value={termId}
+        onChange={setPickedTermId}
+        options={terms.data.map((t) => ({ key: t.id, label: t.id === currentTermId.data ? `${t.name} · current` : t.name }))}
+      />
     ) : null;
 
   if (years.isLoading) {
@@ -291,16 +284,4 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     ...elevation.raised,
   },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  chipActive: { backgroundColor: colors.white },
-  chipLabel: { ...typography.captionStrong, color: colors.white },
-  chipLabelActive: { color: semantic.primary },
 });

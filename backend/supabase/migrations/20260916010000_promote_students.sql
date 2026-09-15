@@ -1,0 +1,16 @@
+-- FR-ADM (year rollover): "students are promoted to the next grade's class
+-- at the start of a new academic year, and students completing the highest
+-- grade leave the school." There was no way to do either in bulk — only
+-- set_student_class() (one student at a time) and set_student_status()
+-- existed.
+--
+-- 'graduated' is a new person_status value, distinct from 'left' (which
+-- already means withdrawn/transferred per FR-STU-12): reporting needs to
+-- tell "finished school" apart from "withdrew", and set_student_status()
+-- already accepts any person_status value with no changes needed there.
+--
+-- Kept in its own migration/transaction: Postgres refuses to use a new enum
+-- value inside the same transaction that added it (55P04) — the follow-up
+-- migration (20260916020000) is what actually puts 'graduated' to use, in a
+-- transaction that starts after this one has committed.
+alter type person_status add value if not exists 'graduated';

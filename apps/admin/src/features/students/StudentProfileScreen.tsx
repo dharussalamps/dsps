@@ -161,7 +161,12 @@ export function StudentProfileScreen() {
               {s.className ? ` · ${s.className}` : ''}
             </Text>
           </View>
-          {s.status !== 'active' ? <StatusPill label={s.status === 'left' ? 'Left' : s.status} tone="neutral" /> : null}
+          {s.status !== 'active' ? (
+            <StatusPill
+              label={s.status === 'left' ? 'Left' : s.status === 'graduated' ? 'Graduated' : s.status}
+              tone={s.status === 'graduated' ? 'gold' : 'neutral'}
+            />
+          ) : null}
           {primaryGuardian ? (
             <Pressable
               accessibilityRole="button"
@@ -377,16 +382,20 @@ export function StudentProfileScreen() {
         <Card>
           <SectionHeader icon="settings-outline" label="RECORD" />
           <Text style={{ ...typography.caption, color: semantic.textSecondary }}>
-            {s.status === 'left'
-              ? 'This student is currently marked as left and hidden from rosters and counts.'
-              : 'Mark this student as left if they have withdrawn or transferred. All records are kept.'}
+            {s.status === 'graduated'
+              ? 'This student graduated at a year rollover and is hidden from rosters and counts. All records are kept.'
+              : s.status === 'left'
+                ? 'This student is currently marked as left and hidden from rosters and counts.'
+                : 'Mark this student as left if they have withdrawn or transferred. All records are kept.'}
           </Text>
-          <Button
-            label={s.status === 'left' ? 'Reactivate this student' : 'Mark as left'}
-            variant={s.status === 'left' ? 'outline' : 'danger'}
-            onPress={() => void toggleLeft()}
-            loading={statusBusy}
-          />
+          {s.status !== 'graduated' ? (
+            <Button
+              label={s.status === 'left' ? 'Reactivate this student' : 'Mark as left'}
+              variant={s.status === 'left' ? 'outline' : 'danger'}
+              onPress={() => void toggleLeft()}
+              loading={statusBusy}
+            />
+          ) : null}
         </Card>
       ) : null}
       </>

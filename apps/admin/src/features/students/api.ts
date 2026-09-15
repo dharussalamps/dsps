@@ -7,7 +7,7 @@ export type StudentSummary = {
   fullName: string;
   preferredName: string | null;
   photoPath: string | null;
-  status: 'active' | 'inactive' | 'left';
+  status: 'active' | 'inactive' | 'left' | 'graduated';
 };
 
 export type UnassignedStudent = StudentSummary & { hasAttendance: boolean };
@@ -72,7 +72,7 @@ export async function searchStudents(query: string, classIds?: string[]): Promis
       .select('roll_no, class_id, students!inner(id, admission_no, full_name, preferred_name, photo_path, status)')
       .in('class_id', classIds)
       .or(`admission_no.ilike.%${term}%,full_name.ilike.%${term}%`, { foreignTable: 'students' })
-      .neq('students.status', 'left')
+      .not('students.status', 'in', '(left,graduated)')
       .order('full_name', { foreignTable: 'students' })
       .limit(30)
       .returns<{ roll_no: string | null; class_id: string; students: StudentRow | null }[]>();
@@ -87,8 +87,8 @@ export async function searchStudents(query: string, classIds?: string[]): Promis
     .from('students')
     .select('id, admission_no, full_name, preferred_name, photo_path, status')
     .or(`admission_no.ilike.%${term}%,full_name.ilike.%${term}%`)
-    // FR-STU-12: a student marked 'left' is excluded from rosters and counts.
-    .neq('status', 'left')
+    // FR-STU-12: a student marked 'left' is excluded from rosters and counts — same for 'graduated'.
+    .not('status', 'in', '(left,graduated)')
     .order('full_name')
     .limit(30)
     .returns<StudentRow[]>();
@@ -119,8 +119,8 @@ export async function listStudentsInClass(classId: string): Promise<(StudentSumm
     .from('student_enrolments')
     .select('roll_no, students!inner(id, admission_no, full_name, preferred_name, photo_path, status)')
     .eq('class_id', classId)
-    // FR-STU-12: excluded from rosters and counts once marked 'left'.
-    .neq('students.status', 'left')
+    // FR-STU-12: excluded from rosters and counts once marked 'left' — same for 'graduated'.
+    .not('students.status', 'in', '(left,graduated)')
     .order('roll_no')
     .returns<{ roll_no: string | null; students: StudentRow | null }[]>();
 
@@ -138,7 +138,7 @@ export async function listStudentsInClasses(classIds: string[]): Promise<(Studen
     .from('student_enrolments')
     .select('roll_no, class_id, students!inner(id, admission_no, full_name, preferred_name, photo_path, status)')
     .in('class_id', classIds)
-    .neq('students.status', 'left')
+    .not('students.status', 'in', '(left,graduated)')
     .order('full_name', { foreignTable: 'students' })
     .returns<{ roll_no: string | null; class_id: string; students: StudentRow | null }[]>();
 
@@ -168,7 +168,7 @@ export async function searchEnrolledStudents(query: string): Promise<(StudentSum
     .select('class_id, classes!inner(name), academic_years!inner(is_current), students!inner(id, admission_no, full_name, preferred_name, photo_path, status)')
     .eq('academic_years.is_current', true)
     .or(`admission_no.ilike.%${term}%,full_name.ilike.%${term}%`, { foreignTable: 'students' })
-    .neq('students.status', 'left')
+    .not('students.status', 'in', '(left,graduated)')
     .order('full_name', { foreignTable: 'students' })
     .limit(30)
     .returns<{ class_id: string; classes: { name: string } | null; students: StudentRow | null }[]>();
@@ -276,9 +276,37 @@ export async function createStudent(input: NewStudentInput): Promise<string> {
 }
 
 /** FR-STU-12: marks a student left (or reactivates one), retaining all their records. */
-export async function setStudentStatus(studentId: string, status: 'active' | 'inactive' | 'left', reason?: string): Promise<void> {
+export async function setStudentStatus(studentId: string, status: 'active' | 'inactive' | 'left' | 'graduated', reason?: string): Promise<void> {
   const { error } = await supabase.rpc('set_student_status', { p_student_id: studentId, p_status: status, p_reason: reason || null });
   if (error) throw error;
+}
+
+export type PromotionResult = { promoted: number; alreadyEnrolled: number; graduated: number; alreadyGraduated: number };
+
+/**
+ * Bulk year-rollover write: enrols each {studentId, classId} pair into
+ * targetYearId, and marks each id in graduatingStudentIds as 'graduated'.
+ * Idempotent — see promote_students() (20260916010000_promote_students.sql)
+ * for why re-running (e.g. after adding a straggler) is always safe.
+ */
+export async function promoteStudents(input: {
+  targetYearId: string;
+  promotions: { studentId: string; classId: string }[];
+  graduatingStudentIds: string[];
+}): Promise<PromotionResult> {
+  const { data, error } = await supabase.rpc('promote_students', {
+    p_target_year_id: input.targetYearId,
+    p_promotions: input.promotions.map((p) => ({ student_id: p.studentId, class_id: p.classId })),
+    p_graduations: input.graduatingStudentIds,
+  });
+  if (error) throw error;
+  const result = data as unknown as { promoted: number; already_enrolled: number; graduated: number; already_graduated: number };
+  return {
+    promoted: result.promoted,
+    alreadyEnrolled: result.already_enrolled,
+    graduated: result.graduated,
+    alreadyGraduated: result.already_graduated,
+  };
 }
 
 /**

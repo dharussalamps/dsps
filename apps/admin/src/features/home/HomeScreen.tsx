@@ -3,7 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
-import { Avatar, Button, Card, Hero, HeroDoodle, Icon, Screen, ScreenHeader, StatusPill, TextField } from '@/components';
+import { Avatar, Button, Card, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SectionHeader, StatusPill, TextField } from '@/components';
 import { fetchStudentsAtRisk } from '@/features/analytics/api';
 import { remindUnmarkedClassesBulk } from '@/features/attendance/api';
 import { todayIso, useMarkingStatus, useStaffAttendanceToday } from '@/features/attendance/hooks';
@@ -18,8 +18,41 @@ import { useOpenDrawer } from '@/navigation/DrawerContext';
 import type { RootStackParamList } from '@/navigation/types';
 import { useAuthStore } from '@/store/authStore';
 import { colors, semantic, spacing, typography } from '@/theme/tokens';
-import { useClassesNeedingCover, useMyClasses, useIsSchoolDayToday } from './hooks';
+import { AcademicPerformanceCard } from './AcademicPerformanceCard';
+import { AnnouncementsFeedCard } from './AnnouncementsFeedCard';
+import { AuditActivityCard } from './AuditActivityCard';
+import { BirthdaysCard } from './BirthdaysCard';
+import { CalendarOverviewCard } from './CalendarOverviewCard';
+import { CoverAssignmentsCard } from './CoverAssignmentsCard';
+import { EarlyLeaveLogCard } from './EarlyLeaveLogCard';
+import { EnrollmentSnapshotCard } from './EnrollmentSnapshotCard';
+import {
+  useAcademicPerformanceSummary,
+  useCalendarOverview,
+  useClassesNeedingCover,
+  useEarlyLeavesToday,
+  useEnrollmentSnapshot,
+  useMyClasses,
+  useIsSchoolDayToday,
+  useNewThisTerm,
+  useRecentAnnouncements,
+  useRecentAuditActivity,
+  useRecentNotifications,
+  useStaffOnLeaveToday,
+  useStudentAttendanceToday,
+  useThisWeeksEvents,
+  useTodaysBirthdays,
+  useUpcomingCoverAssignments,
+} from './hooks';
+import { MissionCard } from './MissionCard';
 import { MyClassAttendanceCard } from './MyClassAttendanceCard';
+import { NewThisTermCard } from './NewThisTermCard';
+import { NotificationsDigestCard } from './NotificationsDigestCard';
+import { OutstandingMarkSheetsCard } from './OutstandingMarkSheetsCard';
+import { StaffAttendanceDetailCard } from './StaffAttendanceDetailCard';
+import { TodayCard } from './TodayCard';
+import { useWidgetPrefs } from './widgetPrefs';
+import { WeekEventsCard } from './WeekEventsCard';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -50,6 +83,7 @@ export function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const openDrawer = useOpenDrawer();
   const staff = useAuthStore((s) => s.staff);
+  const { isEnabled } = useWidgetPrefs();
   const isSchoolDay = useIsSchoolDayToday();
   const myClasses = useMyClasses(staff?.id);
   const onDate = todayIso();
@@ -58,17 +92,23 @@ export function HomeScreen() {
   const marking = useMarkingStatus(onDate);
   const staffBoard = useStaffAttendanceToday(onDate);
   const pendingLeave = usePendingLeaveRequests();
-  const atRisk = useQuery({ queryKey: ['home', 'at-risk'], queryFn: fetchStudentsAtRisk });
+  const staffOnLeave = useStaffOnLeaveToday(isEnabled('schoolPulse'));
+  const atRisk = useQuery({
+    queryKey: ['home', 'at-risk'],
+    queryFn: fetchStudentsAtRisk,
+    enabled: isEnabled('needsAttention'),
+  });
   const needsCover = useClassesNeedingCover(onDate);
   const outstandingSheets = useOutstandingMarkSheets();
   const lowStock = useQuery({
     queryKey: ['home', 'low-stock'],
     queryFn: async () => (await listInventoryItems('')).filter((i) => i.lowStock),
+    enabled: isEnabled('needsAttention'),
   });
   const myDuties = useQuery({
     queryKey: ['home', 'my-duties', staff?.id],
     queryFn: () => fetchResponsibilitiesForStaff(staff!.id),
-    enabled: !!staff,
+    enabled: !!staff && isEnabled('today'),
   });
   const todaysEvents = useQuery({
     queryKey: ['home', 'todays-events', onDate],
@@ -77,12 +117,47 @@ export function HomeScreen() {
       const events = await listEventsInMonth(y, m);
       return events.filter((e) => e.startsOn <= onDate && (e.endsOn ?? e.startsOn) >= onDate);
     },
+    enabled: isEnabled('today'),
   });
+  const academicPerformance = useAcademicPerformanceSummary(isEnabled('academicPerformance'));
+  const birthdays = useTodaysBirthdays(isEnabled('birthdays'));
+  const studentAttendanceToday = useStudentAttendanceToday(onDate, isEnabled('schoolPulse'));
+  const recentAnnouncements = useRecentAnnouncements(staff?.id, isEnabled('announcementsFeed'));
+  const recentNotifications = useRecentNotifications(isEnabled('notificationsDigest'));
+  const weekEvents = useThisWeeksEvents(isEnabled('weekEvents'));
+  const earlyLeavesToday = useEarlyLeavesToday(onDate, isEnabled('earlyLeaveLog'));
+  const upcomingCover = useUpcomingCoverAssignments(isEnabled('coverAssignments'));
+  const enrollmentSnapshot = useEnrollmentSnapshot(isEnabled('enrollmentSnapshot'));
+  const calendarOverview = useCalendarOverview(isEnabled('calendarOverview'));
+  const recentAudit = useRecentAuditActivity(isEnabled('auditActivity'));
+  const newThisTerm = useNewThisTerm(isEnabled('newThisTerm'));
 
   const loading = isSchoolDay.isLoading || myClasses.isLoading;
   const unmarked = (marking.data ?? []).filter((c) => !c.submitted);
   const presentStaff = (staffBoard.data ?? []).filter((s) => s.status === 'present' || s.status === 'late').length;
   const totalStaff = staffBoard.data?.length ?? 0;
+  const classesMarked = (marking.data ?? []).filter((c) => c.submitted).length;
+  const totalClasses = marking.data?.length ?? 0;
+
+  // Built as a flat list, then chunked 2-per-row below, so a hidden metric (e.g. no classes
+  // marked yet) closes the gap instead of leaving an empty cell in a fixed 2x2 grid.
+  const schoolPulseMetrics: { key: string; label: string; value: string; onPress?: () => void }[] = [];
+  if (totalStaff > 0) schoolPulseMetrics.push({ key: 'staff', label: 'Staff present', value: `${presentStaff}/${totalStaff}` });
+  schoolPulseMetrics.push({
+    key: 'approvals',
+    label: 'Approvals pending',
+    value: String(pendingLeave.data?.length ?? 0),
+    onPress: () => navigation.navigate('LeaveRequests'),
+  });
+  if (studentAttendanceToday.data?.totalMarked) {
+    schoolPulseMetrics.push({
+      key: 'attendance',
+      label: 'Student attendance',
+      value: `${Math.round((100 * studentAttendanceToday.data.presentCount) / studentAttendanceToday.data.totalMarked)}%`,
+    });
+  }
+  if (totalClasses > 0) schoolPulseMetrics.push({ key: 'marked', label: 'Classes marked', value: `${classesMarked}/${totalClasses}` });
+  const schoolPulseRows = [schoolPulseMetrics.slice(0, 2), schoolPulseMetrics.slice(2, 4)].filter((row) => row.length > 0);
 
   return (
     <Screen padded={false} edges={['left', 'right']}>
@@ -115,57 +190,134 @@ export function HomeScreen() {
           </Card>
         ) : (
           <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
-            {myClasses.data?.map((c) => (
-              <MyClassAttendanceCard key={c.classId} myClass={c} />
-            ))}
+            {isEnabled('myClassAttendance')
+              ? myClasses.data?.map((c) => <MyClassAttendanceCard key={c.classId} myClass={c} />)
+              : null}
           </View>
         )}
       </Hero>
 
       <View style={styles.body}>
-        {unmarked.length > 0 ? <UnmarkedClassesCard classes={unmarked} onDate={onDate} /> : null}
+        {isEnabled('schoolMission') ? <MissionCard /> : null}
 
-        {totalStaff > 0 || pendingLeave.data?.length ? (
+        {isEnabled('unmarkedClasses') && unmarked.length > 0 ? <UnmarkedClassesCard classes={unmarked} onDate={onDate} /> : null}
+
+        {isEnabled('schoolPulse') && (totalStaff > 0 || pendingLeave.data?.length || staffOnLeave.data?.length || studentAttendanceToday.data?.totalMarked) ? (
           <Card>
-            <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>SCHOOL PULSE</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingVertical: spacing.sm }}>
-              {totalStaff > 0 ? <Metric label="Staff present" value={`${presentStaff}/${totalStaff}`} /> : null}
-              <Metric label="Approvals pending" value={String(pendingLeave.data?.length ?? 0)} onPress={() => navigation.navigate('LeaveRequests')} />
-            </View>
-          </Card>
-        ) : null}
-
-        <NeedsAttention
-          pendingLeaveCount={pendingLeave.data?.length ?? 0}
-          atRiskCount={atRisk.data?.length ?? 0}
-          needsCoverCount={needsCover.data?.length ?? 0}
-          lowStockCount={lowStock.data?.length ?? 0}
-          outstandingSheetsCount={outstandingSheets.data?.length ?? 0}
-          onNavigate={navigation.navigate}
-        />
-
-        {(myDuties.data?.length ?? 0) > 0 || (todaysEvents.data?.length ?? 0) > 0 ? (
-          <Card>
-            <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>TODAY</Text>
-            {myDuties.data?.map((d) => (
-              <Text key={d.id} style={{ ...typography.body, color: semantic.textPrimary, paddingVertical: spacing.xs }}>
-                {d.title}
-                {d.scheduleNote ? ` · ${d.scheduleNote}` : ''}
-              </Text>
-            ))}
-            {todaysEvents.data?.map((e) => (
-              <View
-                key={e.id}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.xs }}
-              >
-                <Icon name="calendar-outline" size={16} color={semantic.textPrimary} />
-                <Text style={{ ...typography.body, color: semantic.textPrimary }}>{e.title}</Text>
+            <SectionHeader icon="pulse-outline" label="SCHOOL PULSE" />
+            {schoolPulseRows.map((row, i) => (
+              <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-around', paddingVertical: spacing.sm }}>
+                {row.map((m) => (
+                  <Metric key={m.key} label={m.label} value={m.value} onPress={m.onPress} />
+                ))}
               </View>
             ))}
+            {staffOnLeave.data?.length ? (
+              <Text style={{ ...typography.caption, color: semantic.textSecondary, marginTop: spacing.xs }}>
+                On leave today: {staffOnLeave.data.map((s) => s.fullName).join(', ')}
+              </Text>
+            ) : null}
           </Card>
         ) : null}
 
-        <QuickActions />
+        {isEnabled('needsAttention') ? (
+          <NeedsAttention
+            pendingLeaveCount={pendingLeave.data?.length ?? 0}
+            atRiskCount={atRisk.data?.length ?? 0}
+            needsCoverCount={needsCover.data?.length ?? 0}
+            lowStockCount={lowStock.data?.length ?? 0}
+            outstandingSheetsCount={outstandingSheets.data?.length ?? 0}
+            onNavigate={navigation.navigate}
+          />
+        ) : null}
+
+        <View style={styles.grid}>
+          {isEnabled('today') && ((myDuties.data?.length ?? 0) > 0 || (todaysEvents.data?.length ?? 0) > 0) ? (
+            <View style={styles.gridItem}>
+              <TodayCard duties={myDuties.data ?? []} events={todaysEvents.data ?? []} />
+            </View>
+          ) : null}
+
+          {isEnabled('academicPerformance') && academicPerformance.data?.avgPct != null ? (
+            <View style={styles.gridItem}>
+              <AcademicPerformanceCard summary={academicPerformance.data} />
+            </View>
+          ) : null}
+
+          {isEnabled('birthdays') && (birthdays.data?.length ?? 0) > 0 ? (
+            <View style={styles.gridItem}>
+              <BirthdaysCard birthdays={birthdays.data!} />
+            </View>
+          ) : null}
+
+          {isEnabled('announcementsFeed') && (recentAnnouncements.data?.length ?? 0) > 0 ? (
+            <View style={styles.gridItem}>
+              <AnnouncementsFeedCard announcements={recentAnnouncements.data!} />
+            </View>
+          ) : null}
+
+          {isEnabled('notificationsDigest') && (recentNotifications.data?.length ?? 0) > 0 ? (
+            <View style={styles.gridItem}>
+              <NotificationsDigestCard notifications={recentNotifications.data!} />
+            </View>
+          ) : null}
+
+          {isEnabled('weekEvents') && (weekEvents.data?.length ?? 0) > 0 ? (
+            <View style={styles.gridItem}>
+              <WeekEventsCard events={weekEvents.data!} />
+            </View>
+          ) : null}
+
+          {isEnabled('earlyLeaveLog') && (earlyLeavesToday.data?.length ?? 0) > 0 ? (
+            <View style={styles.gridItem}>
+              <EarlyLeaveLogCard earlyLeaves={earlyLeavesToday.data!} />
+            </View>
+          ) : null}
+
+          {isEnabled('outstandingMarkSheetsList') && (outstandingSheets.data?.length ?? 0) > 0 ? (
+            <View style={styles.gridItem}>
+              <OutstandingMarkSheetsCard sheets={outstandingSheets.data!} />
+            </View>
+          ) : null}
+
+          {isEnabled('coverAssignments') && (upcomingCover.data?.length ?? 0) > 0 ? (
+            <View style={styles.gridItem}>
+              <CoverAssignmentsCard assignments={upcomingCover.data!} />
+            </View>
+          ) : null}
+
+          {isEnabled('staffAttendanceDetail') && (staffBoard.data?.length ?? 0) > 0 ? (
+            <View style={styles.gridItem}>
+              <StaffAttendanceDetailCard staff={staffBoard.data!} />
+            </View>
+          ) : null}
+
+          {isEnabled('enrollmentSnapshot') && (enrollmentSnapshot.data?.totalStudents ?? 0) > 0 ? (
+            <View style={styles.gridItem}>
+              <EnrollmentSnapshotCard snapshot={enrollmentSnapshot.data!} />
+            </View>
+          ) : null}
+
+          {isEnabled('calendarOverview') && (calendarOverview.data?.upcoming.length || calendarOverview.data?.currentTermEndsOn) ? (
+            <View style={styles.gridItem}>
+              <CalendarOverviewCard overview={calendarOverview.data!} />
+            </View>
+          ) : null}
+
+          {isEnabled('auditActivity') && (recentAudit.data?.length ?? 0) > 0 ? (
+            <View style={styles.gridItem}>
+              <AuditActivityCard entries={recentAudit.data!} />
+            </View>
+          ) : null}
+
+          {isEnabled('newThisTerm') && ((newThisTerm.data?.newStudents ?? 0) > 0 || (newThisTerm.data?.newStaff ?? 0) > 0) ? (
+            <View style={styles.gridItem}>
+              <NewThisTermCard data={newThisTerm.data!} />
+            </View>
+          ) : null}
+        </View>
+
+        {isEnabled('quickActions') ? <QuickActions /> : null}
       </View>
     </Screen>
   );
@@ -173,6 +325,8 @@ export function HomeScreen() {
 
 const styles = StyleSheet.create({
   body: { padding: spacing.lg, gap: spacing.lg },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  gridItem: { flexBasis: '47%', flexGrow: 1 },
 });
 
 function Metric({ label, value, onPress }: { label: string; value: string; onPress?: () => void }) {
@@ -248,7 +402,7 @@ function NeedsAttention({
 
   return (
     <Card>
-      <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>NEEDS ATTENTION</Text>
+      <SectionHeader icon="alert-circle-outline" label="NEEDS ATTENTION" />
       {rows.map((r) => (
         <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.xs }}>
           <Text style={{ ...typography.body, color: semantic.textPrimary }} onPress={r.onPress}>
@@ -289,13 +443,14 @@ function QuickActions() {
 
   return (
     <Card>
-      <Text style={{ ...typography.captionStrong, color: semantic.textSecondary }}>QUICK ACTIONS</Text>
+      <SectionHeader icon="flash-outline" label="QUICK ACTIONS" />
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.sm }}>
         <Button label="Announce" size="sm" variant="outline" onPress={() => navigation.navigate('ComposeAnnouncement')} />
         <Button label="Find student" size="sm" variant="outline" onPress={() => navigation.navigate('Tabs', { screen: 'StudentSearch' })} />
         {!closing ? (
           <Button label="Declare closure" size="sm" variant="outline" onPress={() => setClosing(true)} />
         ) : null}
+        <Button label="Audit log" size="sm" variant="outline" onPress={() => navigation.navigate('AuditLog')} />
       </View>
       {closing ? (
         <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>

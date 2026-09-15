@@ -15,6 +15,7 @@ import {
   TextField,
 } from '@/components';
 import { useAcademicYears } from '@/features/calendar/hooks';
+import { YearChip } from '@/features/calendar/YearChip';
 import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
 import type { LeaveAllocationRow } from './api';
 import { useLeaveAllocations, useLeaveTypes, useSetLeaveBalance, useSetLeaveBalancesForAll } from './hooks';
@@ -94,21 +95,9 @@ export function LeaveAllocationScreen() {
         <ScreenHeader title="Leave allocation" subtitle="Set entitled days per staff member" tone="onPrimary" hideBell back={navigation.canGoBack()} />
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-          {(years.data ?? []).map((y) => {
-            const active = y.id === yearId;
-            return (
-              <Pressable
-                key={y.id}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                onPress={() => setPickedYearId(y.id)}
-                style={[styles.chip, active && styles.chipActive]}
-              >
-                <Icon name="calendar-outline" size={14} color={active ? semantic.primary : colors.white} />
-                <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{y.label}</Text>
-              </Pressable>
-            );
-          })}
+          {(years.data ?? []).map((y) => (
+            <YearChip key={y.id} year={y} active={y.id === yearId} onPress={() => setPickedYearId(y.id)} />
+          ))}
         </ScrollView>
 
         {allocatableLeaveTypes?.length ? (
@@ -246,19 +235,6 @@ function AllocationRow({
 }
 
 const styles = StyleSheet.create({
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  chipActive: { backgroundColor: colors.white },
-  chipLabel: { ...typography.captionStrong, color: colors.white },
-  chipLabelActive: { color: semantic.primary },
-
   bulkCard: {
     flexDirection: 'row',
     alignItems: 'center',

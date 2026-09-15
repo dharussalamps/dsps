@@ -8,7 +8,8 @@ type Props = {
   tone?: PillTone;
 };
 
-const toneStyles: Record<PillTone, { bg: string; fg: string }> = {
+/** Shared tone → color mapping, exported so other small badges (e.g. calendar day-type cards) can match StatusPill's palette exactly instead of redefining their own. */
+export const pillToneColors: Record<PillTone, { bg: string; fg: string }> = {
   success: { bg: colors.successBg, fg: colors.success },
   warning: { bg: colors.warningBg, fg: colors.warning },
   error: { bg: colors.errorBg, fg: colors.error },
@@ -19,7 +20,7 @@ const toneStyles: Record<PillTone, { bg: string; fg: string }> = {
 
 /** Small rounded status label — e.g. attendance status, submission state. */
 export function StatusPill({ label, tone = 'neutral' }: Props) {
-  const t = toneStyles[tone];
+  const t = pillToneColors[tone];
   return (
     <View style={[styles.base, { backgroundColor: t.bg }]}>
       <Text style={[styles.label, { color: t.fg }]}>{label}</Text>

@@ -18,6 +18,7 @@ import {
 import { Avatar, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, SegmentedControl, StatusPill } from '@/components';
 import { useIsPrincipal } from '@/features/accounts/hooks';
 import { useAcademicYears } from '@/features/calendar/hooks';
+import { YearChip } from '@/features/calendar/YearChip';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, elevation, minTapTarget, radius, semantic, spacing, typography } from '@/theme/tokens';
 import { MATERNITY_PHASE_LABEL, type LeaveRequestRow } from './api';
@@ -116,24 +117,17 @@ export function LeaveRequestsScreen() {
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, marginTop: spacing.md }}>
-          {(years.data ?? []).map((y) => {
-            const yActive = y.id === yearId;
-            return (
-              <Pressable
-                key={y.id}
-                accessibilityRole="button"
-                accessibilityState={{ selected: yActive }}
-                onPress={() => {
-                  animateNext();
-                  setPickedYearId(y.id);
-                }}
-                style={[styles.chip, yActive && styles.chipActive]}
-              >
-                <Icon name="calendar-outline" size={14} color={yActive ? semantic.primary : colors.white} />
-                <Text style={[styles.chipLabel, yActive && styles.chipLabelActive]}>{y.label}</Text>
-              </Pressable>
-            );
-          })}
+          {(years.data ?? []).map((y) => (
+            <YearChip
+              key={y.id}
+              year={y}
+              active={y.id === yearId}
+              onPress={() => {
+                animateNext();
+                setPickedYearId(y.id);
+              }}
+            />
+          ))}
         </ScrollView>
 
         <View style={{ marginTop: spacing.sm }}>
@@ -267,19 +261,6 @@ const styles = StyleSheet.create({
   heroStatValue: { ...typography.subtitle, color: colors.white },
   heroStatLabel: { ...typography.caption, color: colors.cream100 },
   statDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', backgroundColor: 'rgba(255,255,255,0.25)' },
-
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  chipActive: { backgroundColor: colors.white },
-  chipLabel: { ...typography.captionStrong, color: colors.white },
-  chipLabelActive: { color: semantic.primary },
 
   searchCard: {
     flexDirection: 'row',

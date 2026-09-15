@@ -59,11 +59,13 @@ export type RootStackParamList = {
   AcademicCalendar: undefined;
   CalendarDayEditor: { date: string };
   AcademicStructure: undefined;
+  PromoteStudents: undefined;
 
   Analytics: undefined;
   UserAccounts: undefined;
   AuditLog: undefined;
   Settings: undefined;
+  DashboardWidgets: undefined;
   Notifications: undefined;
   AssignCover: { classId?: string } | undefined;
 };

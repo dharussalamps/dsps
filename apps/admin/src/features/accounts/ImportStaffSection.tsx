@@ -12,7 +12,7 @@ type ImportResult = {
   results: { row_index: number; id: string; accepted: boolean; error: string | null }[];
 };
 
-const COLUMNS = 'staff_no, full_name, phone, email, joined_on, address';
+const COLUMNS = 'staff_no, full_name, phone, email, joined_on, birth_date, address';
 
 /**
  * section 8/build task 5: spreadsheet import. Section 10's screen table

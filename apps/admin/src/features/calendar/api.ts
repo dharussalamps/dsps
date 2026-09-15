@@ -66,16 +66,16 @@ export async function listAcademicYears(): Promise<AcademicYear[]> {
   return (data ?? []).map((r) => ({ id: r.id, label: r.label, startsOn: r.starts_on, endsOn: r.ends_on, isCurrent: r.is_current }));
 }
 
-/** FR-CAL-01: "the principal defines an academic year with a start and end date." */
-export async function addAcademicYear(input: { label: string; startsOn: string; endsOn: string; makeCurrent: boolean }): Promise<void> {
-  const { data, error } = await supabase.from('academic_years').insert({ label: input.label, starts_on: input.startsOn, ends_on: input.endsOn }).select('id').single();
+/**
+ * FR-CAL-01: "the principal defines an academic year with a start and end date."
+ * is_current is never set here — a DB trigger (academic_years_sync_current, see
+ * 20260916000000_sync_current_academic_year.sql) flips it to whichever year's
+ * starts_on/ends_on actually contains today's date right after the insert commits,
+ * so a future year created ahead of time doesn't wrongly become "current".
+ */
+export async function addAcademicYear(input: { label: string; startsOn: string; endsOn: string }): Promise<void> {
+  const { error } = await supabase.from('academic_years').insert({ label: input.label, starts_on: input.startsOn, ends_on: input.endsOn });
   if (error) throw error;
-  if (input.makeCurrent) {
-    // one_current_year is a partial unique index — clear the old flag first so the new insert's flip doesn't collide.
-    await supabase.from('academic_years').update({ is_current: false }).neq('id', data.id);
-    const { error: flagError } = await supabase.from('academic_years').update({ is_current: true }).eq('id', data.id);
-    if (flagError) throw flagError;
-  }
 }
 
 /** FR-CAL-02: "the principal defines terms within the year, each with a start and end date. Terms may not overlap" (enforced by a DB exclusion constraint). */
@@ -88,6 +88,45 @@ export async function addTerm(input: { academicYearId: string; name: string; seq
     ends_on: input.endsOn,
   });
   if (error) throw error;
+}
+
+export async function updateAcademicYear(id: string, input: { label: string; startsOn: string; endsOn: string }): Promise<void> {
+  const { error } = await supabase.from('academic_years').update({ label: input.label, starts_on: input.startsOn, ends_on: input.endsOn }).eq('id', id);
+  if (error) throw error;
+}
+
+/** Fails with a foreign key violation (Postgres code 23503) while any class, enrolment, leave balance, benefit, responsibility, or event still references this year — that's the "only when unlinked" rule, enforced by the DB schema itself rather than a pre-check here. Its own terms cascade-delete with it. */
+export async function deleteAcademicYear(id: string): Promise<void> {
+  const { error } = await supabase.from('academic_years').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** Backs the Delete icon's visibility, not the delete itself — see academic_year_can_delete (20260915020000_academic_year_term_can_delete.sql). */
+export async function canDeleteAcademicYear(id: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('academic_year_can_delete', { p_academic_year_id: id });
+  if (error) throw error;
+  return data ?? false;
+}
+
+export async function updateTerm(id: string, input: { name: string; sequence: number; startsOn: string; endsOn: string }): Promise<void> {
+  const { error } = await supabase
+    .from('terms')
+    .update({ name: input.name, sequence: input.sequence, starts_on: input.startsOn, ends_on: input.endsOn })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+/** Fails with a foreign key violation (Postgres code 23503) while any mark sheet or attendance summary still references this term — that's the "only when unlinked" rule, enforced by the DB schema itself rather than a pre-check here. */
+export async function deleteTerm(id: string): Promise<void> {
+  const { error } = await supabase.from('terms').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** Backs the Delete icon's visibility, not the delete itself — see term_can_delete (20260915020000_academic_year_term_can_delete.sql). */
+export async function canDeleteTerm(id: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('term_can_delete', { p_term_id: id });
+  if (error) throw error;
+  return data ?? false;
 }
 
 /** FR-CAL-03: "the principal sets the weekly working-day pattern for the school." ISO weekdays, 1 = Monday. */
@@ -130,5 +169,22 @@ export async function listCalendarDaysInRange(startIso: string, endIso: string):
 /** FR-CAL-06: cancels the day's attendance obligations, excludes it from summaries, and notifies all staff — all server-side (declare_closure()). */
 export async function declareClosure(onDate: string, label?: string): Promise<void> {
   const { error } = await supabase.rpc('declare_closure', { p_date: onDate, p_label: label || null });
+  if (error) throw error;
+}
+
+/** Every explicit calendar_days row, across every date — backs the "edited days" list on AcademicCalendarScreen so the principal can review, re-open, or remove any override in one place instead of having to already know a date to look it up. */
+export async function listAllCalendarDays(): Promise<CalendarDayEntry[]> {
+  const { data, error } = await supabase.from('calendar_days').select('on_date, day_type, label').order('on_date');
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ onDate: r.on_date, dayType: r.day_type as CalendarDayType, label: r.label }));
+}
+
+/**
+ * Removes an explicit override so the date reverts to whatever the term/working-weekday
+ * defaults say — different from setting its type back to 'school', which instead forces a
+ * school day regardless of those defaults (see is_school_day() in 20260907100003_is_school_day.sql).
+ */
+export async function deleteCalendarDay(onDate: string): Promise<void> {
+  const { error } = await supabase.from('calendar_days').delete().eq('on_date', onDate);
   if (error) throw error;
 }

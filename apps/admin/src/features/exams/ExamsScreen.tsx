@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, ScrollView, SectionList, StyleSheet, Text, View } from 'react-native';
 import { Avatar, Card, EmptyState, Hero, HeroDoodle, Icon, Screen, ScreenHeader, StatusPill, type PillTone } from '@/components';
 import { useAcademicYears } from '@/features/calendar/hooks';
+import { YearChip } from '@/features/calendar/YearChip';
 import type { RootStackParamList } from '@/navigation/types';
 import { colors, radius, semantic, spacing, typography } from '@/theme/tokens';
 import type { ExamCard, YearClass } from './api';
@@ -76,21 +77,9 @@ export function ExamsScreen() {
         />
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-          {(years.data ?? []).map((y) => {
-            const active = y.id === yearId;
-            return (
-              <Pressable
-                key={y.id}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                onPress={() => pickYear(y.id)}
-                style={[styles.chip, active && styles.chipActive]}
-              >
-                <Icon name="calendar-outline" size={14} color={active ? semantic.primary : colors.white} />
-                <Text style={[styles.chipLabel, active && styles.chipLabelActive]}>{y.label}</Text>
-              </Pressable>
-            );
-          })}
+          {(years.data ?? []).map((y) => (
+            <YearChip key={y.id} year={y} active={y.id === yearId} onPress={() => pickYear(y.id)} />
+          ))}
         </ScrollView>
 
         {!classId ? (
@@ -227,18 +216,6 @@ function ExamCardRow({ item, rosterCount, onPress }: { item: ExamCard; rosterCou
 }
 
 const styles = StyleSheet.create({
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-  },
-  chipActive: { backgroundColor: colors.white },
-  chipLabel: { ...typography.captionStrong, color: colors.white },
-  chipLabelActive: { color: semantic.primary },
   heroStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',

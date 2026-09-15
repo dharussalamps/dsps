@@ -2,7 +2,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { AcademicStructureScreen } from '@/features/academicStructure/AcademicStructureScreen';
 import { AnnouncementsScreen } from '@/features/announcements/AnnouncementsScreen';
 import { ComposeAnnouncementScreen } from '@/features/announcements/ComposeAnnouncementScreen';
+import { DashboardWidgetsScreen } from '@/features/home/DashboardWidgetsScreen';
 import { NotificationsScreen } from '@/features/notifications/NotificationsScreen';
+import { PromoteStudentsScreen } from '@/features/promotion/PromoteStudentsScreen';
 import { AssignCoverScreen } from '@/features/leave/AssignCoverScreen';
 import { AttendanceSubmittedScreen } from '@/features/attendance/AttendanceSubmittedScreen';
 import { MarkAttendanceScreen } from '@/features/attendance/MarkAttendanceScreen';
@@ -93,11 +95,13 @@ export function AppNavigator() {
       <Stack.Screen name="AcademicCalendar" component={AcademicCalendarScreen} />
       <Stack.Screen name="CalendarDayEditor" component={CalendarDayEditorScreen} />
       <Stack.Screen name="AcademicStructure" component={AcademicStructureScreen} />
+      <Stack.Screen name="PromoteStudents" component={PromoteStudentsScreen} />
 
       <Stack.Screen name="Analytics" component={AnalyticsScreen} />
       <Stack.Screen name="UserAccounts" component={UserAccountsScreen} />
       <Stack.Screen name="AuditLog" component={AuditLogScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="DashboardWidgets" component={DashboardWidgetsScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
       <Stack.Screen name="AssignCover" component={AssignCoverScreen} />
     </Stack.Navigator>

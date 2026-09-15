@@ -33,3 +33,9 @@ export function formatDMYInput(raw: string): string {
   if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
 }
+
+/** Whether today's date falls within an ISO 'YYYY-MM-DD' range (inclusive) — flags e.g. the current term/year from an already-fetched list without a second query. */
+export function isCurrentPeriod(startsOnIso: string, endsOnIso: string): boolean {
+  const today = new Date().toISOString().slice(0, 10);
+  return startsOnIso <= today && today <= endsOnIso;
+}

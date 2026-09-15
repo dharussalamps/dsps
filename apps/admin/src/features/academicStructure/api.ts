@@ -13,6 +13,24 @@ export async function addGrade(number: number, name: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function updateGrade(id: string, number: number, name: string): Promise<void> {
+  const { error } = await supabase.from('grades').update({ number, name }).eq('id', id);
+  if (error) throw error;
+}
+
+/** Fails with a foreign key violation (Postgres code 23503) while any class or subject still references this grade — that's the "only when unlinked" rule, enforced by the DB schema itself rather than a pre-check here. */
+export async function deleteGrade(id: string): Promise<void> {
+  const { error } = await supabase.from('grades').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** Backs the Delete icon's visibility, not the delete itself — see grade_can_delete (20260915000000_grade_class_can_delete.sql). */
+export async function canDeleteGrade(id: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('grade_can_delete', { p_grade_id: id });
+  if (error) throw error;
+  return data ?? false;
+}
+
 export type Subject = { id: string; name: string; code: string | null; gradeIds: string[] };
 
 export async function listSubjects(): Promise<Subject[]> {
@@ -32,6 +50,30 @@ export async function addSubject(name: string, code: string | undefined, gradeId
     const { error: linkError } = await supabase.from('grade_subjects').insert(gradeIds.map((gradeId) => ({ subject_id: data.id, grade_id: gradeId })));
     if (linkError) throw linkError;
   }
+}
+
+export async function updateSubject(id: string, name: string, code: string | undefined, gradeIds: string[]): Promise<void> {
+  const { error } = await supabase.from('subjects').update({ name, code: code || null }).eq('id', id);
+  if (error) throw error;
+  const { error: delError } = await supabase.from('grade_subjects').delete().eq('subject_id', id);
+  if (delError) throw delError;
+  if (gradeIds.length > 0) {
+    const { error: linkError } = await supabase.from('grade_subjects').insert(gradeIds.map((gradeId) => ({ subject_id: id, grade_id: gradeId })));
+    if (linkError) throw linkError;
+  }
+}
+
+/** Fails with a foreign key violation (Postgres code 23503) while any grade, class, or mark sheet still references this subject — that's the "only when unlinked" rule, enforced by the DB schema itself rather than a pre-check here. */
+export async function deleteSubject(id: string): Promise<void> {
+  const { error } = await supabase.from('subjects').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** Backs the Delete icon's visibility, not the delete itself — see subject_can_delete (20260915010000_subject_can_delete.sql). */
+export async function canDeleteSubject(id: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('subject_can_delete', { p_subject_id: id });
+  if (error) throw error;
+  return data ?? false;
 }
 
 export type ClassRow = { id: string; name: string; gradeId: string; gradeNumber: number; classTeacherId: string | null; classTeacherName: string | null };
@@ -64,9 +106,83 @@ export async function addClass(input: { gradeId: string; name: string; academicY
   if (error) throw error;
 }
 
+/** Same shape as listClassesForCurrentYear, but for a specific year — used by the promotion flow to see what already exists in the year students are being promoted into. */
+export async function listClassesForYear(academicYearId: string): Promise<ClassRow[]> {
+  const { data, error } = await supabase
+    .from('classes')
+    .select('id, name, grade_id, grades(number), class_teacher_id, staff(full_name)')
+    .eq('academic_year_id', academicYearId)
+    .order('name')
+    .returns<{ id: string; name: string; grade_id: string; grades: { number: number } | null; class_teacher_id: string | null; staff: { full_name: string } | null }[]>();
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    name: r.name,
+    gradeId: r.grade_id,
+    gradeNumber: r.grades?.number ?? 0,
+    classTeacherId: r.class_teacher_id,
+    classTeacherName: r.staff?.full_name ?? null,
+  }));
+}
+
+/**
+ * Returns an existing class's id if `academicYearId` already has one named
+ * `name` in the same grade, else creates it. Used by the promotion flow so
+ * mapping the same destination class for several source classes (or
+ * re-running promotion) never tries to create a duplicate. Class names are
+ * only unique per year (not per grade), so a name typed for one grade could
+ * collide with an unrelated class in another grade — that's treated as a
+ * naming conflict rather than silently reusing the wrong grade's class.
+ */
+export async function ensureClassForYear(input: { academicYearId: string; gradeId: string; name: string }): Promise<string> {
+  const { data: existing, error: findError } = await supabase
+    .from('classes')
+    .select('id, grade_id')
+    .eq('academic_year_id', input.academicYearId)
+    .eq('name', input.name)
+    .maybeSingle();
+  if (findError) throw findError;
+  if (existing) {
+    const found = existing as { id: string; grade_id: string };
+    if (found.grade_id !== input.gradeId) {
+      throw new Error(`A class named "${input.name}" already exists in this year for a different grade — choose another name.`);
+    }
+    return found.id;
+  }
+
+  const { data: created, error: insertError } = await supabase
+    .from('classes')
+    .insert({ grade_id: input.gradeId, name: input.name, academic_year_id: input.academicYearId })
+    .select('id')
+    .single();
+  if (insertError) throw insertError;
+  return (created as { id: string }).id;
+}
+
 export async function setClassTeacher(classId: string, staffId: string | null): Promise<void> {
   const { error } = await supabase.from('classes').update({ class_teacher_id: staffId }).eq('id', classId);
   if (error) throw error;
+}
+
+export async function updateClass(id: string, input: { gradeId: string; name: string; classTeacherId?: string | null }): Promise<void> {
+  const { error } = await supabase
+    .from('classes')
+    .update({ grade_id: input.gradeId, name: input.name, class_teacher_id: input.classTeacherId ?? null })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+/** Fails with a foreign key violation (Postgres code 23503) while any enrolment, attendance, or marks row still references this class — that's the "only when unlinked" rule, enforced by the DB schema itself rather than a pre-check here. class_subject_teachers rows cascade-delete along with the class since that join table is purely derived from it. */
+export async function deleteClass(id: string): Promise<void> {
+  const { error } = await supabase.from('classes').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/** Backs the Delete icon's visibility, not the delete itself — see class_can_delete (20260915000000_grade_class_can_delete.sql). */
+export async function canDeleteClass(id: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('class_can_delete', { p_class_id: id });
+  if (error) throw error;
+  return data ?? false;
 }
 
 export type ClassSubjectTeacherRow = { id: string; classId: string; className: string; subjectId: string; subjectName: string; staffId: string; staffName: string };
